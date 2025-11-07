@@ -83,23 +83,38 @@ Environment variables:
 python server.py
 ```
 
-The server will start and listen on the configured port (default: 8080) using Server-Sent Events (SSE) transport.
+The server will start using stdio transport for communication with Claude Code or other MCP clients.
 
 ## Usage
 
-### Connecting AI Agents
+### Connecting with Claude Code
 
-Configure your AI agent to connect to the MCP server:
+DevilMCP is designed to work seamlessly with Claude Code. Add this configuration to your Claude Code config file:
 
+**Location:**
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- Mac: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Linux: `~/.config/Claude/claude_desktop_config.json`
+
+**Configuration:**
 ```json
 {
   "mcpServers": {
     "devilmcp": {
-      "url": "http://localhost:8080/sse"
+      "command": "python",
+      "args": ["/absolute/path/to/DevilMCP/server.py"],
+      "env": {
+        "LOG_LEVEL": "INFO",
+        "MAX_CONTEXT_DEPTH": "10"
+      }
     }
   }
 }
 ```
+
+Replace `/absolute/path/to/DevilMCP/server.py` with the actual path to your server.py file.
+
+See [SETUP_GUIDE.md](SETUP_GUIDE.md) for detailed configuration instructions.
 
 ### Available Tools
 

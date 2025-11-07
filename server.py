@@ -736,7 +736,8 @@ def get_mcp_statistics() -> Dict:
 # MAIN
 # ============================================================================
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for the DevilMCP server."""
     logger.info(f"Starting DevilMCP server on port {port}")
     logger.info(f"Storage path: {storage_path}")
 
@@ -760,3 +761,7 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Server error: {e}", exc_info=True)
         raise
+
+
+if __name__ == "__main__":
+    main()
