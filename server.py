@@ -5,6 +5,7 @@ track decisions, and understand cascading impacts.
 """
 
 import os
+import sys
 import logging
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
@@ -12,7 +13,7 @@ from dotenv import load_dotenv
 try:
     from mcp.server.fastmcp import FastMCP
 except ImportError:
-    print("ERROR: fastmcp not installed. Run: pip install -r requirements.txt")
+    print("ERROR: fastmcp not installed. Run: pip install -r requirements.txt", file=sys.stderr)
     exit(1)
 
 from context_manager import ContextManager
@@ -741,18 +742,8 @@ def main():
     logger.info(f"Starting DevilMCP server on port {port}")
     logger.info(f"Storage path: {storage_path}")
 
-    print("""
-    =================================================================
-                             DevilMCP Server
-    =================================================================
-      An extremely powerful MCP server for AI agents that:
-      * Maintains full project context
-      * Tracks decisions and their outcomes
-      * Analyzes change impacts and cascade risks
-      * Manages thought processes and reasoning
-      * Prevents short-sighted development decisions
-    =================================================================
-    """)
+    # Banner removed to prevent interference with stdio transport JSON-RPC messages
+    # All server information is available through logging and get_mcp_statistics() tool
 
     try:
         mcp.run(transport="stdio")
