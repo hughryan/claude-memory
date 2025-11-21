@@ -54,7 +54,7 @@ class ChangeAnalyzer:
                         "file_path": path,
                         "change_type": change_type,
                         "status": status_label,
-                        "diff_size": diff.diff.len if diff.diff else 0
+                        "diff_size": len(diff.diff) if diff.diff else 0
                     })
 
             # Staged changes
