@@ -7,11 +7,10 @@ import hashlib
 import logging
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
-from pathlib import Path
-from sqlalchemy import select, desc, func, or_
+from sqlalchemy import select, update, desc
 
-from database import DatabaseManager
-from models import Change
+from .database import DatabaseManager
+from .models import Change
 
 # Try importing gitpython
 try:
