@@ -5,13 +5,13 @@ Analyzes code changes and their potential cascading impacts across the project.
 
 import hashlib
 import logging
+from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
-from pathlib import Path
-from sqlalchemy import select, desc, func, or_
+from sqlalchemy import select, update, desc, func
 
-from database import DatabaseManager
-from models import Change
+from .database import DatabaseManager
+from .models import Change
 
 # Try importing gitpython
 try:
@@ -54,7 +54,7 @@ class ChangeAnalyzer:
                         "file_path": path,
                         "change_type": change_type,
                         "status": status_label,
-                        "diff_size": len(diff.diff) if diff.diff else 0
+                        "diff_size": diff.diff.len if diff.diff else 0
                     })
 
             # Staged changes
