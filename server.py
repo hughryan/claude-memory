@@ -25,6 +25,7 @@ from thought_processor import ThoughtProcessor
 from database import DatabaseManager
 from process_manager import ProcessManager
 from tool_registry import ToolRegistry
+from task_manager import TaskManager
 # Removed Orchestrator and TaskRouter imports
 
 # Load environment variables
@@ -84,7 +85,8 @@ mcp = FastMCP("DevilMCP")
 db_manager = DatabaseManager(storage_path)
 process_manager = ProcessManager(db_manager)
 tool_registry = ToolRegistry(db_manager)
-context_mgr = ContextManager(storage_path)
+task_manager = TaskManager(db_manager)
+context_mgr = ContextManager(db_manager)
 decision_tracker = DecisionTracker(db_manager)
 cascade_detector = CascadeDetector(db_manager, storage_path)
 change_analyzer = ChangeAnalyzer(db_manager, cascade_detector)
@@ -94,15 +96,15 @@ logger.info("DevilMCP Server initialized")
 
 # Context management tools
 @mcp.tool()
-def analyze_project_structure(project_path: str) -> Dict:
+async def analyze_project_structure(project_path: str) -> Dict:
     """
     Analyze entire project structure to build comprehensive context.
     """
     logger.info(f"Analyzing project structure: {project_path}")
-    return context_mgr.analyze_project_structure(project_path)
+    return await context_mgr.analyze_project_structure(project_path)
 
 @mcp.tool()
-def track_file_dependencies(
+async def track_file_dependencies(
     file_path: str,
     project_root: Optional[str] = None
 ) -> Dict:
@@ -110,10 +112,10 @@ def track_file_dependencies(
     Analyze file dependencies including imports and relationships.
     """
     logger.info(f"Tracking dependencies: {file_path}")
-    return context_mgr.track_file_dependencies(file_path, project_root)
+    return await context_mgr.track_file_dependencies(file_path, project_root)
 
 @mcp.tool()
-def get_project_context(
+async def get_project_context(
     project_path: Optional[str] = None,
     include_dependencies: bool = True
 ) -> Dict:
@@ -121,15 +123,15 @@ def get_project_context(
     Retrieve comprehensive project context.
     """
     logger.info(f"Getting project context: {project_path or 'all'}")
-    return context_mgr.get_project_context(project_path, include_dependencies)
+    return await context_mgr.get_project_context(project_path, include_dependencies)
 
 @mcp.tool()
-def search_context(query: str, context_type: str = "all") -> List[Dict]:
+async def search_context(query: str, context_type: str = "all") -> List[Dict]:
     """
     Search context data for specific information.
     """
     logger.info(f"Searching context: {query}")
-    return context_mgr.search_context(query, context_type)
+    return await context_mgr.search_context(query, context_type)
 
 # Decision tracking tools
 @mcp.tool()
@@ -432,6 +434,69 @@ async def get_session_summary(session_id: str) -> Dict:
     """
     logger.info(f"Getting session summary: {session_id}")
     return await thought_processor.get_session_summary(session_id)
+
+# Task Management Tools
+@mcp.tool()
+async def create_task(
+    title: str,
+    description: Optional[str] = None,
+    priority: str = "medium",
+    assigned_to: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+    parent_id: Optional[int] = None
+) -> Dict:
+    """
+    Create a new task.
+    """
+    logger.info(f"Creating task: {title}")
+    return await task_manager.create_task(
+        title, description, priority, assigned_to, tags, parent_id
+    )
+
+@mcp.tool()
+async def update_task(
+    task_id: int,
+    status: Optional[str] = None,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    priority: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    tags: Optional[List[str]] = None
+) -> Dict:
+    """
+    Update a task.
+    """
+    logger.info(f"Updating task: {task_id}")
+    updated = await task_manager.update_task(
+        task_id, status, title, description, priority, assigned_to, tags
+    )
+    if updated:
+        return updated
+    return {"error": f"Task {task_id} not found"}
+
+@mcp.tool()
+async def list_tasks(
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    limit: int = 50
+) -> List[Dict]:
+    """
+    List tasks with optional filters.
+    """
+    logger.info(f"Listing tasks (status={status})")
+    return await task_manager.list_tasks(status, priority, assigned_to, limit)
+
+@mcp.tool()
+async def get_task(task_id: int) -> Dict:
+    """
+    Get details of a specific task.
+    """
+    logger.info(f"Getting task: {task_id}")
+    task = await task_manager.get_task(task_id)
+    if task:
+        return task
+    return {"error": f"Task {task_id} not found"}
 
 # Utility tools
 @mcp.tool()

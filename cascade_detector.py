@@ -3,7 +3,6 @@ Cascade Detector Module
 Detects and analyzes potential cascading failures and dependency chains.
 """
 
-import json
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
@@ -29,38 +28,12 @@ class CascadeDetector:
         self.db = db_manager
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(exist_ok=True)
-        
-        # Keep graph data in JSON for now as it's complex/transient
-        self.cascade_file = self.storage_path / "cascade_analysis.json"
-        self.cascade_data = self._load_cascade_data()
 
         # Dependency graph
         if nx:
             self.dep_graph = nx.DiGraph()
         else:
             self.dep_graph = None
-
-    def _load_cascade_data(self) -> Dict:
-        """Load existing cascade analysis data (graph & risks)."""
-        if self.cascade_file.exists():
-            try:
-                with open(self.cascade_file, 'r') as f:
-                    return json.load(f)
-            except Exception as e:
-                logger.error(f"Error loading cascade data: {e}")
-
-        return {
-            "dependency_chains": {},
-            "risk_scores": {}
-        }
-
-    def _save_cascade_data(self):
-        """Persist cascade analysis data."""
-        try:
-            with open(self.cascade_file, 'w') as f:
-                json.dump(self.cascade_data, f, indent=2)
-        except Exception as e:
-            logger.error(f"Error saving cascade data: {e}")
 
     def build_dependency_graph(self, dependencies: Dict[str, Dict]) -> Dict:
         """
@@ -94,14 +67,6 @@ class CascadeDetector:
             "weakly_connected_components": nx.number_weakly_connected_components(self.dep_graph),
             "analyzed_at": datetime.now(timezone.utc).isoformat()
         }
-
-        # Store graph structure
-        self.cascade_data["dependency_chains"] = {
-            "nodes": list(self.dep_graph.nodes()),
-            "edges": [(u, v) for u, v in self.dep_graph.edges()],
-            "stats": stats
-        }
-        self._save_cascade_data()
 
         return stats
 
@@ -307,14 +272,6 @@ class CascadeDetector:
 
         # Generate recommendations
         risk["recommendations"] = self._generate_cascade_recommendations(risk)
-
-        # Store cascade risk assessment in local JSON cache for now
-        self.cascade_data["risk_scores"][target] = {
-            "score": risk["risk_level"],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "change_type": change_type
-        }
-        self._save_cascade_data()
 
         return risk
 
@@ -542,8 +499,7 @@ class CascadeDetector:
                 "total_events": total_events,
                 "severity_distribution": severity_dist,
                 "most_common_triggers": common_triggers,
-                "most_recent_event": last_event.isoformat() if last_event else None,
-                "risk_scores_tracked": len(self.cascade_data.get("risk_scores", {}))
+                "most_recent_event": last_event.isoformat() if last_event else None
             }
 
     def _event_to_dict(self, e: CascadeEvent) -> Dict:

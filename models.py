@@ -141,3 +141,53 @@ class WorkflowExecution(Base):
     started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime, nullable=True)
     result = Column(JSON, default=dict)
+
+class Task(Base):
+    """General purpose task tracking"""
+    __tablename__ = "tasks"
+    
+    id = Column(Integer, primary_key=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String, default="todo") # todo, in_progress, done, blocked
+    priority = Column(String, default="medium")
+    assigned_to = Column(String, nullable=True) # specific tool or 'user'
+    tags = Column(JSON, default=list)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime, nullable=True)
+    parent_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)
+
+class ProjectFile(Base):
+    """Tracked file in the project"""
+    __tablename__ = "project_files"
+    
+    id = Column(Integer, primary_key=True)
+    file_path = Column(String, unique=True, nullable=False, index=True)
+    file_type = Column(String, nullable=True)
+    size = Column(Integer, nullable=True)
+    last_modified = Column(DateTime, nullable=True)
+    line_count = Column(Integer, nullable=True)
+    hash = Column(String, nullable=True)
+    language = Column(String, nullable=True)
+    
+class FileDependency(Base):
+    """Dependencies between files"""
+    __tablename__ = "file_dependencies"
+    
+    id = Column(Integer, primary_key=True)
+    source_file_id = Column(Integer, ForeignKey("project_files.id"), nullable=False)
+    target_file_id = Column(Integer, ForeignKey("project_files.id"), nullable=False)
+    dependency_type = Column(String, default="import") # import, inheritance, usage
+    
+    # We might want to store external dependencies too, but for now let's link internal files
+    # For external deps, we could have a separate table or just a JSON list in ProjectFile
+    
+class ExternalDependency(Base):
+    """External package dependencies"""
+    __tablename__ = "external_dependencies"
+    
+    id = Column(Integer, primary_key=True)
+    source_file_id = Column(Integer, ForeignKey("project_files.id"), nullable=False)
+    package_name = Column(String, nullable=False)
+    version_constraint = Column(String, nullable=True)
