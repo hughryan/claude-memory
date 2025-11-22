@@ -79,12 +79,21 @@ class ToolRegistry:
             for tool in tools:
                 # Ensure all config parameters have defaults
                 cfg = tool.config
+                
+                # Safely parse capabilities
+                valid_capabilities = []
+                for cap_str in tool.capabilities:
+                    try:
+                        valid_capabilities.append(ToolCapability(cap_str))
+                    except ValueError:
+                        logger.warning(f"Tool '{tool.name}' has invalid capability '{cap_str}'. Skipping this capability.")
+
                 tool_config = ToolConfig(
                     name=tool.name,
                     display_name=tool.display_name,
                     command=tool.command,
                     args=tool.args,
-                    capabilities=[ToolCapability(c) for c in tool.capabilities],
+                    capabilities=valid_capabilities,
                     enabled=bool(tool.enabled),
                     config=cfg,
                     prompt_patterns=cfg.get("prompt_patterns", [">>> ", "$ ", "> "]),
