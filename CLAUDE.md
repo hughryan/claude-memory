@@ -12,9 +12,6 @@ DevilMCP is an MCP (Model Context Protocol) server that provides long-term memor
 # Install (editable mode)
 pip install -e .
 
-# Install browser binaries (required for browser tools)
-playwright install
-
 # Run the MCP server
 python -m devilmcp.server
 # Or via console script:
@@ -38,9 +35,11 @@ pytest -v --asyncio-mode=auto  # For async tests
 │  • cascade_detector.py  → Cascade failure detection (networkx graphs)
 │  • task_manager.py      → Task/todo management
 │  • thought_processor.py → AI reasoning chain tracking
-│  • browser.py           → Playwright web automation
 │  • tool_registry.py     → CLI tool management
-│  • process_manager.py   → Process lifecycle management
+│  • process_manager.py   → Process lifecycle management (deprecated)
+│  • executor.py          → Tool execution abstraction
+│  • subprocess_executor.py → Subprocess-based tool execution
+│  • native_executors/    → Native SDK integrations (git, etc.)
 ├─────────────────────────────────────┤
 │  database.py + models.py            │  ← SQLAlchemy ORM, async SQLite
 └─────────────────────────────────────┘

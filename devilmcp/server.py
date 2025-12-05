@@ -27,7 +27,6 @@ from devilmcp.database import DatabaseManager
 from devilmcp.process_manager import ProcessManager
 from devilmcp.tool_registry import ToolRegistry
 from devilmcp.task_manager import TaskManager
-from devilmcp.browser import BrowserManager
 # Removed Orchestrator and TaskRouter imports
 
 # Load environment variables
@@ -93,7 +92,6 @@ decision_tracker = DecisionTracker(db_manager)
 cascade_detector = CascadeDetector(db_manager, storage_path)
 change_analyzer = ChangeAnalyzer(db_manager, cascade_detector)
 thought_processor = ThoughtProcessor(db_manager)
-browser_manager = BrowserManager()
 
 logger.info("DevilMCP Server initialized")
 
@@ -534,51 +532,6 @@ async def get_mcp_statistics() -> Dict:
         }
     }
 
-# === BROWSER AUTOMATION TOOLS ===
-
-@mcp.tool()
-async def browser_navigate(url: str) -> str:
-    """
-    Navigate the browser to a specific URL.
-    """
-    return await browser_manager.navigate(url)
-
-@mcp.tool()
-async def browser_click(selector: str) -> str:
-    """
-    Click an element on the current page.
-    """
-    return await browser_manager.click(selector)
-
-@mcp.tool()
-async def browser_type(selector: str, text: str) -> str:
-    """
-    Type text into an element on the current page.
-    """
-    return await browser_manager.type_text(selector, text)
-
-@mcp.tool()
-async def browser_get_content(format_type: str = "text") -> str:
-    """
-    Get page content.
-    format_type: 'text', 'html', 'markdown', 'accessibility'
-    """
-    return await browser_manager.get_content(format_type)
-
-@mcp.tool()
-async def browser_screenshot() -> Dict[str, str]:
-    """
-    Take a screenshot of the current page (returns base64).
-    """
-    return await browser_manager.screenshot()
-
-@mcp.tool()
-async def browser_run_script(script: str) -> str:
-    """
-    Execute custom JavaScript on the current page.
-    """
-    return await browser_manager.run_script(script)
-
 # === TOOL MANAGEMENT TOOLS (Robustness) ===
 
 @mcp.tool()
@@ -749,7 +702,6 @@ async def cleanup():
     logger.info("Cleaning up resources...")
     try:
         await tool_registry.cleanup_executors()
-        await browser_manager.close()
     except Exception as e:
         logger.error(f"Error during cleanup: {e}", exc_info=True)
 

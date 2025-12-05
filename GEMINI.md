@@ -1,7 +1,7 @@
 # DevilMCP Project Context
 
 ## Overview
-DevilMCP is an advanced **Context Management System** and **MCP (Model Context Protocol) Server** designed for AI agents. It serves as a "long-term memory" and project manager, enabling AI assistants to track decisions, analyze code impact, and manage tasks across sessions. It features a modular architecture backed by SQLite and includes web browsing capabilities via Playwright.
+DevilMCP is an advanced **Context Management System** and **MCP (Model Context Protocol) Server** designed for AI agents. It serves as a "long-term memory" and project manager, enabling AI assistants to track decisions, analyze code impact, and manage tasks across sessions. It features a modular architecture backed by SQLite with a robust tool execution system supporting both native SDK integrations and subprocess-based CLI tools.
 
 ## Key Features
 *   **Context Management:** `devilmcp.context_manager` tracks project structure and file dependencies.
@@ -9,7 +9,7 @@ DevilMCP is an advanced **Context Management System** and **MCP (Model Context P
 *   **Change Analysis:** `devilmcp.change_analyzer` predicts the impact of code changes ("blast radius").
 *   **Cascade Detection:** `devilmcp.cascade_detector` identifies potential cascade failures from changes.
 *   **Task Management:** `devilmcp.task_manager` handles todo lists and project tasks.
-*   **Browser Automation:** `devilmcp.browser` allows the agent to navigate and extract web content.
+*   **Tool Execution:** Robust executor system with `devilmcp.executor`, `devilmcp.subprocess_executor`, and native integrations in `devilmcp.native_executors/`.
 *   **Tool Registry:** `devilmcp.tool_registry` manages external CLI tools that the agent can invoke.
 
 ## Architecture
@@ -25,7 +25,6 @@ The project is a Python package structured as follows:
 The project is designed for editable installation:
 ```bash
 pip install -e .
-playwright install  # Required for browser tools
 ```
 
 ### Running the Server

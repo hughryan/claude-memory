@@ -29,13 +29,6 @@ Follow the **Zero-Touch Setup Protocol** below.
     ```
     *   *Validation:* Run `devilmcp --help` to confirm installation. If it fails, check your Python environment and try `python -m pip install -e ...`.
 
-3.  **Install Browser Engine:**
-    *   Run the Playwright installer to download the necessary browser binaries.
-    ```bash
-    playwright install
-    ```
-    *   *Validation:* Ensure the command completes successfully.
-
 ---
 
 ## 🔌 Phase 2: Autonomous Integration
@@ -175,12 +168,12 @@ Once connected, you MUST adhere to these operational rules. **Do not wait for us
 2.  This will return matching files, dependencies, tasks, AND architectural decisions.
 3.  Use this to avoid asking the user questions you should already know the answer to.
 
-### 6. The "Web Research" Protocol
-**When:** You need to look up documentation or verify a live website.
+### 6. The "Custom Tools" Protocol
+**When:** You need to execute a registered CLI tool.
 **Action:**
-1.  Use `browser_navigate(url)` to visit the page.
-2.  Use `browser_get_content(format_type="accessibility")` to read the page content in an LLM-friendly format.
-3.  Use `browser_click()` or `browser_type()` to interact if needed.
+1.  Use `list_available_tools()` to see what tools are available.
+2.  Use `execute_tool(tool_name, command, args)` to run the tool with appropriate parameters.
+3.  For stateful tools (REPLs), the session is maintained across calls automatically.
 
 ---
 
