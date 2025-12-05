@@ -4,13 +4,11 @@ An extremely powerful MCP server for AI agents to maintain context,
 track decisions, and understand cascading impacts.
 """
 
-import os
 import sys
 import logging
 import asyncio
 import atexit
 from typing import Dict, List, Optional
-from dotenv import load_dotenv
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -18,6 +16,7 @@ except ImportError:
     print("ERROR: fastmcp not installed. Run: pip install -r requirements.txt", file=sys.stderr)
     exit(1)
 
+from devilmcp.config import settings
 from devilmcp.context_manager import ContextManager
 from devilmcp.decision_tracker import DecisionTracker
 from devilmcp.change_analyzer import ChangeAnalyzer
@@ -27,58 +26,17 @@ from devilmcp.database import DatabaseManager
 from devilmcp.process_manager import ProcessManager
 from devilmcp.tool_registry import ToolRegistry
 from devilmcp.task_manager import TaskManager
-# Removed Orchestrator and TaskRouter imports
-
-# Load environment variables
-load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO')),
+    level=getattr(logging, settings.log_level),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# Determine project-specific storage path
-def get_storage_path():
-    """
-    Determine storage path with project isolation.
-
-    Priority:
-    1. STORAGE_PATH environment variable (explicit override)
-    2. PROJECT_ROOT/.devilmcp/storage (if PROJECT_ROOT is set)
-    3. <cwd>/.devilmcp/storage (current working directory)
-    4. ./storage (fallback for centralized storage)
-    """
-    from pathlib import Path
-
-    # Check for explicit storage path override
-    if os.getenv('STORAGE_PATH'):
-        return os.getenv('STORAGE_PATH')
-
-    # Get project root
-    project_root = os.getenv('PROJECT_ROOT', os.getcwd())
-    project_path = Path(project_root).resolve()
-    server_path = Path(__file__).parent.resolve()
-
-    # If we're running from the DevilMCP server directory itself, use centralized storage
-    if project_path == server_path:
-        storage = server_path / "storage" / "centralized"
-        logger.info("Using centralized storage (running from DevilMCP directory)")
-    else:
-        # Use project-specific storage
-        storage = project_path / ".devilmcp" / "storage"
-        logger.info(f"Project detected: {project_path.name}")
-        logger.info(f"Using project-specific storage: {storage}")
-
-    # Create directory if it doesn't exist
-    storage.mkdir(parents=True, exist_ok=True)
-
-    return str(storage)
-
 # Initialize FastMCP server
-port = int(os.getenv('PORT', 8080))
-storage_path = get_storage_path()
+port = settings.port
+storage_path = settings.get_storage_path()
 
 mcp = FastMCP("DevilMCP")
 
@@ -94,7 +52,6 @@ change_analyzer = ChangeAnalyzer(db_manager, cascade_detector)
 thought_processor = ThoughtProcessor(db_manager)
 
 logger.info("DevilMCP Server initialized")
-
 # Context management tools
 @mcp.tool()
 async def analyze_project_structure(project_path: str) -> Dict:

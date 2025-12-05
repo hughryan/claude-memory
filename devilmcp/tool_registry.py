@@ -245,8 +245,8 @@ class ToolRegistry:
         # Check if native executor available
         if tool_name in self._native_registry:
             try:
-                import os
-                repo_path = os.getenv('PROJECT_ROOT', os.getcwd())
+                from .config import settings
+                repo_path = settings.project_root
                 executor = self._native_registry[tool_name](repo_path)
                 self._executors[tool_name] = executor
                 logger.info(f"Using native executor for {tool_name}")

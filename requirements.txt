@@ -11,3 +11,15 @@ aiosqlite>=0.19.0
 pytest>=7.0.0
 pytest-asyncio>=0.23.0
 toml>=0.10.2
+
+# Pydantic Settings
+pydantic-settings>=2.0.0
+
+# Alembic for database migrations
+alembic>=1.13.0
+
+# Tree-sitter for code parsing (optional but recommended)
+tree-sitter>=0.21.0
+tree-sitter-python>=0.21.0
+tree-sitter-javascript>=0.21.0
+tree-sitter-typescript>=0.21.0

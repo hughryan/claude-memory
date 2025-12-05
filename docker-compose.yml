@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  devilmcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: devilmcp
+    volumes:
+      # Persistent storage for database
+      - devilmcp-data:/home/devilmcp/data
+      # Mount user's project read-only for analysis
+      - ${PROJECT_PATH:-.}:/workspace:ro
+    environment:
+      - DEVILMCP_PROJECT_ROOT=/workspace
+      - DEVILMCP_LOG_LEVEL=${LOG_LEVEL:-INFO}
+    # Required for MCP stdio transport
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+volumes:
+  devilmcp-data:
+    driver: local

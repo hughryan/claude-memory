@@ -10,6 +10,32 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
+def run_migrations(db_url: str) -> None:
+    """Run Alembic migrations to upgrade schema to head."""
+    try:
+        from alembic.config import Config
+        from alembic import command
+        from pathlib import Path
+
+        # Get the path to alembic.ini within the package
+        package_dir = Path(__file__).parent
+        alembic_ini_path = package_dir / "alembic.ini"
+
+        alembic_cfg = Config(str(alembic_ini_path))
+        # Override the script location to use package path
+        alembic_cfg.set_main_option("script_location", str(package_dir / "alembic"))
+        # Set the database URL (use sync URL for Alembic)
+        sync_url = db_url.replace("+aiosqlite", "")
+        alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
+
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations completed successfully")
+    except ImportError:
+        logger.warning("Alembic not installed, skipping migrations")
+    except Exception as e:
+        logger.error(f"Error running migrations: {e}", exc_info=True)
+        raise
+
 
 class DatabaseManager:
     def __init__(self, storage_path: str = "./storage", db_name: str = "devilmcp.db"):
@@ -29,9 +55,16 @@ class DatabaseManager:
         )
 
     async def init_db(self):
-        """Initialize the database tables and default tools."""
-        async with self.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        """Initialize the database tables and run migrations."""
+        from .config import settings
+        
+        # Run Alembic migrations if enabled
+        if settings.auto_migrate:
+            run_migrations(self.db_url)
+        else:
+            # Fall back to create_all for development
+            async with self.engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
         
         await self._init_default_tools()
 
