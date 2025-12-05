@@ -1,4 +1,4 @@
-I # DevilMCP: Autonomous Setup & Integration Instructions
+# DevilMCP: Autonomous Setup & Integration Instructions
 
 **SYSTEM PROMPT FOR AI ASSISTANTS (Claude, Cursor, Windsurf, etc.)**
 
@@ -6,7 +6,7 @@ I # DevilMCP: Autonomous Setup & Integration Instructions
 
 ## 🛑 STOP: Read This First
 
-You are an AI assistant being introduced to **DevilMCP**, your new long-term memory and project management engine. 
+You are an AI assistant being introduced to **DevilMCP**, your new long-term memory and project management engine.
 
 **The user has just downloaded DevilMCP.** Your immediate goal is to install it, configure it, and integrate yourself with it—**completely autonomously**. The user should not have to type a single terminal command manually.
 
@@ -18,16 +18,48 @@ Follow the **Zero-Touch Setup Protocol** below.
 
 **Goal:** Install the DevilMCP package so it is available as a command-line tool.
 
+### Option A: Standard Installation (Recommended)
+
 1.  **Locate DevilMCP:**
     *   Ask the user for the path to the downloaded `DevilMCP` folder if it is not provided in the initial prompt.
     *   *Assumption:* The user has unzipped the repo to a known location (e.g., `C:/Tools/DevilMCP`).
 
 2.  **Install the Package:**
-    *   Execute the following shell command to install DevilMCP in "editable" mode. This makes the `devilmcp` command available system-wide (or within your current environment).
+    *   Execute the following shell command to install DevilMCP in "editable" mode:
     ```bash
     pip install -e "/path/to/DevilMCP"
     ```
-    *   *Validation:* Run `devilmcp --help` to confirm installation. If it fails, check your Python environment and try `python -m pip install -e ...`.
+    *   *Validation:* Run `python -c "import devilmcp"` to confirm installation.
+
+### Option B: Docker Installation (Isolated & Secure)
+
+For containerized deployment with better isolation:
+
+1.  **Build the Docker image:**
+    ```bash
+    cd /path/to/DevilMCP
+    docker compose build
+    ```
+
+2.  **Run with Docker:**
+    ```bash
+    PROJECT_PATH=$(pwd) docker compose up -d
+    ```
+
+3.  **For MCP configuration with Docker**, use:
+    ```json
+    {
+      "mcpServers": {
+        "devilmcp": {
+          "command": "docker",
+          "args": ["compose", "-f", "/path/to/DevilMCP/docker-compose.yml", "run", "--rm", "devilmcp"],
+          "env": {
+            "PROJECT_PATH": "/path/to/user/project"
+          }
+        }
+      }
+    }
+    ```
 
 ---
 
@@ -51,7 +83,8 @@ You need to add DevilMCP to your own configuration file.
       "command": "python",
       "args": ["-m", "devilmcp.server"],
       "env": {
-        "PYTHONPATH": "/path/to/DevilMCP"
+        "PYTHONPATH": "/path/to/DevilMCP",
+        "DEVILMCP_PROJECT_ROOT": "/path/to/user/project"
       }
     }
     ```
@@ -60,34 +93,12 @@ You need to add DevilMCP to your own configuration file.
 3.  **Instruct User to Restart:**
     *   You cannot restart yourself. Tell the user: *"I have configured DevilMCP. Please restart me (quit and relaunch the application) to activate the connection."*
 
-### Scenario B: You are an IDE Agent (Cursor/Windsurf/Copilot)
-You likely cannot edit your own configuration file autonomously. **Guide the user through permanent setup.**
+### Scenario B: You are an IDE Agent (Cursor/Windsurf/VS Code)
 
-#### Option 1: Cursor IDE
+#### Cursor IDE
 1.  **Locate the MCP config file:**
     *   Windows: `%USERPROFILE%\.cursor\mcp.json`
     *   Mac/Linux: `~/.cursor/mcp.json`
-2.  **Create or update the file** with this content (user must do this manually or you write it):
-    ```json
-    {
-      "mcpServers": {
-        "devilmcp": {
-          "command": "python",
-          "args": ["-m", "devilmcp.server"],
-          "env": {
-            "PYTHONPATH": "/path/to/DevilMCP"
-          }
-        }
-      }
-    }
-    ```
-3.  **Restart Cursor** to activate the MCP connection.
-
-#### Option 2: Windsurf IDE
-1.  **Locate the MCP config file:**
-    *   Windows: `%USERPROFILE%\.codeium\windsurf\mcp_config.json`
-    *   Mac: `~/.codeium/windsurf/mcp_config.json`
-    *   Linux: `~/.codeium/windsurf/mcp_config.json`
 2.  **Create or update the file:**
     ```json
     {
@@ -96,7 +107,29 @@ You likely cannot edit your own configuration file autonomously. **Guide the use
           "command": "python",
           "args": ["-m", "devilmcp.server"],
           "env": {
-            "PYTHONPATH": "/path/to/DevilMCP"
+            "PYTHONPATH": "/path/to/DevilMCP",
+            "DEVILMCP_PROJECT_ROOT": "/path/to/user/project"
+          }
+        }
+      }
+    }
+    ```
+3.  **Restart Cursor** to activate the MCP connection.
+
+#### Windsurf IDE
+1.  **Locate the MCP config file:**
+    *   Windows: `%USERPROFILE%\.codeium\windsurf\mcp_config.json`
+    *   Mac/Linux: `~/.codeium/windsurf/mcp_config.json`
+2.  **Create or update the file:**
+    ```json
+    {
+      "mcpServers": {
+        "devilmcp": {
+          "command": "python",
+          "args": ["-m", "devilmcp.server"],
+          "env": {
+            "PYTHONPATH": "/path/to/DevilMCP",
+            "DEVILMCP_PROJECT_ROOT": "/path/to/user/project"
           }
         }
       }
@@ -104,7 +137,7 @@ You likely cannot edit your own configuration file autonomously. **Guide the use
     ```
 3.  **Restart Windsurf** to activate.
 
-#### Option 3: VS Code with Continue Extension
+#### VS Code with Continue Extension
 1.  **Open Continue settings:** Press `Ctrl+Shift+P` → "Continue: Open config.json"
 2.  **Add to the `mcpServers` section:**
     ```json
@@ -114,19 +147,47 @@ You likely cannot edit your own configuration file autonomously. **Guide the use
         "command": "python",
         "args": ["-m", "devilmcp.server"],
         "env": {
-          "PYTHONPATH": "/path/to/DevilMCP"
+          "PYTHONPATH": "/path/to/DevilMCP",
+          "DEVILMCP_PROJECT_ROOT": "/path/to/user/project"
         }
       }
     ]
     ```
 3.  **Reload VS Code** to activate.
 
-#### Fallback: Temporary Background Server
-If permanent configuration isn't possible, start the server manually for this session:
+---
+
+## ⚙️ Configuration
+
+DevilMCP uses environment variables with the `DEVILMCP_` prefix for all settings.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DEVILMCP_PROJECT_ROOT` | Current directory | Root path of the project to analyze |
+| `DEVILMCP_STORAGE_PATH` | Auto-detected | Path to store database and data |
+| `DEVILMCP_PORT` | `8080` | Server port (for HTTP transport) |
+| `DEVILMCP_LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
+| `DEVILMCP_AUTO_MIGRATE` | `true` | Run database migrations on startup |
+| `DEVILMCP_DEFAULT_COMMAND_TIMEOUT` | `30000` | Default command timeout in ms |
+| `DEVILMCP_DEFAULT_INIT_TIMEOUT` | `10000` | Default init timeout in ms |
+
+### Storage Path Logic
+
+If `DEVILMCP_STORAGE_PATH` is not set:
+1. If `DEVILMCP_PROJECT_ROOT` is set → uses `{project_root}/.devilmcp/storage`
+2. Otherwise → uses `{cwd}/.devilmcp/storage`
+3. If running from DevilMCP directory itself → uses centralized storage
+
+### Example .env File
+
+Copy `.env.example` to `.env` and customize:
 ```bash
-python -m devilmcp.server &
+DEVILMCP_PROJECT_ROOT=/path/to/your/project
+DEVILMCP_LOG_LEVEL=DEBUG
+DEVILMCP_AUTO_MIGRATE=true
 ```
-*(This must be repeated each session. Permanent config is strongly preferred.)*
 
 ---
 
@@ -177,8 +238,57 @@ Once connected, you MUST adhere to these operational rules. **Do not wait for us
 
 ---
 
+## 🛠️ Architecture Overview
+
+### Code Parsing
+DevilMCP uses **Tree-sitter** for accurate multi-language AST analysis:
+- **Python**: Uses Python's built-in `ast` module (always accurate)
+- **JavaScript/TypeScript**: Uses tree-sitter for proper AST parsing
+
+The parsers extract:
+- Imports (module name, imported names, line numbers)
+- Functions (name, parameters, line range)
+- Classes (name, methods, line range)
+
+### Database Migrations
+DevilMCP uses **Alembic** for SQLite schema management:
+- Migrations run automatically on startup (when `DEVILMCP_AUTO_MIGRATE=true`)
+- Schema versioned and tracked
+- Safe upgrades for existing databases
+
+### Tool Execution
+Tools are executed via one of two executor types:
+- **Native Executors**: Direct SDK integration (e.g., GitPython for git)
+- **Subprocess Executors**: For CLI tools with stateless or stateful modes
+
+---
+
 ## 📝 Summary for the User
 
 If the user asks "Is it ready?", you should be able to say:
 
 > "I have installed DevilMCP, configured the connection, and verified I can access the tools. I scanned your project and found [X] files. I am ready to help you build with full context awareness."
+
+---
+
+## 🐳 Docker Quick Reference
+
+```bash
+# Build
+docker compose build
+
+# Run with current directory as project
+PROJECT_PATH=$(pwd) docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop
+docker compose down
+```
+
+Docker features:
+- **Non-root user** for security
+- **Read-only project mount** (your code is safe)
+- **Persistent data volume** for database
+- **Resource limits** can be added in compose file
