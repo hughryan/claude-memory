@@ -1,4 +1,4 @@
-# DevilMCP: Autonomous Setup & Integration Instructions
+I # DevilMCP: Autonomous Setup & Integration Instructions
 
 **SYSTEM PROMPT FOR AI ASSISTANTS (Claude, Cursor, Windsurf, etc.)**
 
@@ -68,14 +68,72 @@ You need to add DevilMCP to your own configuration file.
     *   You cannot restart yourself. Tell the user: *"I have configured DevilMCP. Please restart me (quit and relaunch the application) to activate the connection."*
 
 ### Scenario B: You are an IDE Agent (Cursor/Windsurf/Copilot)
-You likely cannot edit your own "hard" configuration file autonomously.
+You likely cannot edit your own configuration file autonomously. **Guide the user through permanent setup.**
 
-1.  **Start the Server in Background:**
-    *   Run the server as a background process to make the tools available *now*.
-    ```bash
-    python -m devilmcp.server &
+#### Option 1: Cursor IDE
+1.  **Locate the MCP config file:**
+    *   Windows: `%USERPROFILE%\.cursor\mcp.json`
+    *   Mac/Linux: `~/.cursor/mcp.json`
+2.  **Create or update the file** with this content (user must do this manually or you write it):
+    ```json
+    {
+      "mcpServers": {
+        "devilmcp": {
+          "command": "python",
+          "args": ["-m", "devilmcp.server"],
+          "env": {
+            "PYTHONPATH": "/path/to/DevilMCP"
+          }
+        }
+      }
+    }
     ```
-    *(Note: This is a temporary session. Ideally, the user should configure the IDE's MCP settings permanently, but this gets you started instantly.)*
+3.  **Restart Cursor** to activate the MCP connection.
+
+#### Option 2: Windsurf IDE
+1.  **Locate the MCP config file:**
+    *   Windows: `%USERPROFILE%\.codeium\windsurf\mcp_config.json`
+    *   Mac: `~/.codeium/windsurf/mcp_config.json`
+    *   Linux: `~/.codeium/windsurf/mcp_config.json`
+2.  **Create or update the file:**
+    ```json
+    {
+      "mcpServers": {
+        "devilmcp": {
+          "command": "python",
+          "args": ["-m", "devilmcp.server"],
+          "env": {
+            "PYTHONPATH": "/path/to/DevilMCP"
+          }
+        }
+      }
+    }
+    ```
+3.  **Restart Windsurf** to activate.
+
+#### Option 3: VS Code with Continue Extension
+1.  **Open Continue settings:** Press `Ctrl+Shift+P` → "Continue: Open config.json"
+2.  **Add to the `mcpServers` section:**
+    ```json
+    "mcpServers": [
+      {
+        "name": "devilmcp",
+        "command": "python",
+        "args": ["-m", "devilmcp.server"],
+        "env": {
+          "PYTHONPATH": "/path/to/DevilMCP"
+        }
+      }
+    ]
+    ```
+3.  **Reload VS Code** to activate.
+
+#### Fallback: Temporary Background Server
+If permanent configuration isn't possible, start the server manually for this session:
+```bash
+python -m devilmcp.server &
+```
+*(This must be repeated each session. Permanent config is strongly preferred.)*
 
 ---
 

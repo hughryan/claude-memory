@@ -46,3 +46,6 @@ logs/
 # Avoid re-adding
 /nul
 .devilmcp/
+
+# Worktrees
+.worktrees/
