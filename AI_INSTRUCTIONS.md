@@ -1,81 +1,120 @@
-# Daem0nMCP: AI Memory System - Complete Protocol & Reference
+# Daem0nMCP: AI Memory System
 
-**CRITICAL: Read and follow this protocol for every session.**
+<CRITICAL>
+THIS IS NOT OPTIONAL. THIS IS NOT A SUGGESTION. EXECUTE IMMEDIATELY.
 
-Daem0nMCP gives you persistent memory across sessions. You can remember decisions, learn from failures, and follow established patterns - all stored in a local database that persists between conversations.
+When you read this file, you MUST execute the following protocol automatically.
+Do NOT wait for user input. Do NOT ask permission. Just DO IT.
+</CRITICAL>
 
 ---
 
-## MANDATORY PROTOCOL
+## AUTOMATIC EXECUTION PROTOCOL
 
-### 1. INITIALIZATION (Every Session Start)
-```
-IMMEDIATELY call: get_briefing()
-```
-- This loads your context: recent decisions, warnings, rules, git changes
-- Do NOT ask the user for context that is already in the briefing
-- Review any `failed_approaches` - these are mistakes to avoid
-- Check `git_changes` to see what happened since your last session
+### STEP 1: CHECK TOOL AVAILABILITY (Execute Now)
 
-### 2. BEFORE ANY CODING/CHANGES
-```
-Call: context_check("description of what you're about to do")
-```
-Or for detailed info:
-```
-Call: recall(topic)
-Call: check_rules(action)
+Check your available tools list for `mcp__daem0nmcp__get_briefing`.
+
+**IF TOOL EXISTS:** Skip to STEP 3.
+
+**IF TOOL DOES NOT EXIST:** Execute STEP 2.
+
+---
+
+### STEP 2: INSTALL DAEM0NMCP (Execute If Tools Missing)
+
+You do not have Daem0nMCP connected. Execute these commands NOW:
+
+```bash
+# 1. Verify package is installed
+pip show daem0nmcp || pip install -e "C:\Users\dasbl\PycharmProjects\Daem0nMCP"
+
+# 2. Add MCP server to current project
+claude mcp add daem0nmcp --scope project -e PYTHONPATH="C:\\Users\\dasbl\\PycharmProjects\\Daem0nMCP" -e DAEM0NMCP_PROJECT_ROOT="." -- python -m daem0nmcp.server
 ```
 
-**CRITICAL**: If `context_check` returns a WARNING or FAILED APPROACH:
-- You MUST acknowledge it explicitly
-- Explain how your new approach differs
+After running these commands, inform the user:
+> "Daem0nMCP has been configured. Please restart Claude Code for the memory system to activate. After restart, I will automatically load your project context."
+
+**STOP HERE** if you just installed. The user must restart for tools to become available.
+
+---
+
+### STEP 3: INITIALIZE MEMORY (Execute Immediately When Tools Available)
+
+**DO NOT WAIT. DO NOT ASK. CALL THIS NOW:**
+
+```
+mcp__daem0nmcp__get_briefing()
+```
+
+This loads your persistent memory: decisions, warnings, patterns, failed approaches, and git changes.
+
+After calling, briefly report to the user:
+> "Daem0nMCP ready. [X] memories loaded. [Y] warnings to review."
+
+If there are failed approaches or warnings, mention them proactively.
+
+---
+
+## ONGOING PROTOCOL (Use Throughout Session)
+
+### Before ANY Code Changes
+```
+mcp__daem0nmcp__context_check(description="what you're about to do")
+```
+OR
+```
+mcp__daem0nmcp__recall_for_file(file_path="path/to/file")
+```
+
+**IF context_check returns a WARNING or FAILED APPROACH:**
+- You MUST acknowledge it explicitly to the user
+- Explain how your approach differs from the failed one
 - Do NOT repeat past failures
 
-### 3. FILE-LEVEL AWARENESS
+### After Making Decisions
 ```
-When opening/modifying a file: recall_for_file("path/to/file.py")
-```
-This shows all memories (warnings, patterns, decisions) linked to that file.
-
-### 4. MEMORY MANAGEMENT
-After completing significant work:
-```
-remember(
+mcp__daem0nmcp__remember(
     category="decision",  # or "pattern", "warning", "learning"
-    content="What you decided/learned",
+    content="What you decided",
     rationale="Why",
     tags=["relevant", "tags"],
-    file_path="optional/file.py"  # Link to specific file
+    file_path="optional/file.py"
 )
 ```
 
-**Category Guide:**
-- `decision`: Architectural/design choices (decays over time)
-- `pattern`: Recurring approaches to follow (PERMANENT - never decays)
-- `warning`: Things to avoid (PERMANENT - never decays)
-- `learning`: Lessons from experience (decays over time)
-
-### 5. OUTCOME TRACKING (NON-NEGOTIABLE)
+### After Implementation (NON-NEGOTIABLE)
 ```
-record_outcome(
-    memory_id=<id>,
+mcp__daem0nmcp__record_outcome(
+    memory_id=<id from remember>,
     outcome="What actually happened",
     worked=true/false
 )
 ```
 
-**CRITICAL**: If something fails, you MUST call `record_outcome` with `worked=false`.
-This prevents future loops - failures get boosted in future recalls.
+**CRITICAL:** If something fails, you MUST call record_outcome with worked=false.
+Failures get boosted in future recalls so you learn from mistakes.
 
 ---
 
-## RULES ENFORCEMENT
+## Category Guide
+
+| Category | Description | Persistence |
+|----------|-------------|-------------|
+| `decision` | Architectural/design choices | Decays over 30 days |
+| `pattern` | Recurring approaches to follow | **PERMANENT** |
+| `warning` | Things to avoid | **PERMANENT** |
+| `learning` | Lessons from experience | Decays over 30 days |
+
+---
+
+## Rules Enforcement
 
 When `check_rules` returns guidance:
-- `must_do`: These are REQUIRED actions - do them
-- `must_not`: These are HARD CONSTRAINTS - never violate
-- `ask_first`: Consider these questions before proceeding
+- `must_do`: REQUIRED actions - do them
+- `must_not`: HARD CONSTRAINTS - never violate
+- `ask_first`: Questions to consider before proceeding
 - `warnings`: Past experiences to keep in mind
 
 ---
