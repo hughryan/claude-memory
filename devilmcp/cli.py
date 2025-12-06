@@ -7,6 +7,7 @@ Usage:
     python -m devilmcp.cli check <filepath>
     python -m devilmcp.cli briefing
     python -m devilmcp.cli scan-todos [--auto-remember]
+    python -m devilmcp.cli migrate [--backfill-vectors]
 """
 
 import sys
@@ -118,6 +119,11 @@ def main():
     scan_parser.add_argument("--auto-remember", action="store_true", help="Auto-create warnings")
     scan_parser.add_argument("--path", help="Path to scan", default=".")
 
+    # migrate command
+    migrate_parser = subparsers.add_parser("migrate", help="Run database migrations")
+    migrate_parser.add_argument("--backfill-vectors", action="store_true",
+                                help="Backfill vector embeddings for existing memories")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -151,6 +157,30 @@ def main():
             print(f"  [{todo['type']}] {todo['file']}:{todo['line']} - {todo['content'][:60]}")
         if len(todos) > 20:
             print(f"  ... and {len(todos) - 20} more")
+
+    elif args.command == "migrate":
+        from .migrations import run_migrations, migrate_and_backfill_vectors
+
+        db_path = str(Path(storage_path) / "devilmcp.db")
+        print(f"Database: {db_path}")
+
+        if args.backfill_vectors:
+            result = migrate_and_backfill_vectors(db_path)
+            print(f"\nMigration complete:")
+            print(f"  Schema migrations: {result['schema_migrations']}")
+            for m in result.get('applied', []):
+                print(f"    - {m}")
+            print(f"  Vectors backfilled: {result['vectors_backfilled']}")
+            print(f"  Vectors available: {result['vectors_available']}")
+            print(f"\n{result['message']}")
+        else:
+            count, applied = run_migrations(db_path)
+            print(f"\nSchema migrations applied: {count}")
+            for m in applied:
+                print(f"  - {m}")
+            if count == 0:
+                print("Database is up to date.")
+            print("\nTo also backfill vectors, run: python -m devilmcp.cli migrate --backfill-vectors")
 
 
 if __name__ == "__main__":
