@@ -3,24 +3,34 @@ DevilMCP Server - AI Memory System with Semantic Understanding
 
 A smarter MCP server that provides:
 1. Semantic memory storage and retrieval (TF-IDF, not just keywords)
-2. Time-weighted recall (recent memories matter more)
+2. Time-weighted recall (recent memories matter more, but patterns/warnings are permanent)
 3. Conflict detection (warns about contradicting decisions)
 4. Rule-based decision trees for consistent AI behavior
 5. Outcome tracking for continuous learning
+6. File-level memory associations
+7. Git awareness (shows changes since last session)
 
-Core Tools:
-- remember: Store a decision, pattern, warning, or learning
+12 Tools:
+- remember: Store a decision, pattern, warning, or learning (with file association)
 - recall: Retrieve relevant memories for a topic (semantic search)
+- recall_for_file: Get all memories for a specific file
 - add_rule: Add a decision tree node
 - check_rules: Validate an action against rules
 - record_outcome: Track whether a decision worked
-- get_briefing: Get everything needed to start a session
+- get_briefing: Get everything needed to start a session (with git changes)
+- context_check: Quick pre-flight check (recall + rules combined)
+- search_memories: Search across all memories
+- list_rules: Show all rules
+- update_rule: Modify existing rule
+- find_related: Discover connected memories
 """
 
 import sys
 import logging
 import atexit
+import subprocess
 from typing import Dict, List, Optional, Any
+from datetime import datetime, timezone
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -63,13 +73,16 @@ async def remember(
     content: str,
     rationale: Optional[str] = None,
     context: Optional[Dict[str, Any]] = None,
-    tags: Optional[List[str]] = None
+    tags: Optional[List[str]] = None,
+    file_path: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Store a decision, pattern, warning, or learning in long-term memory.
 
-    NOW WITH CONFLICT DETECTION: If you're storing something that contradicts
-    a previous decision or matches a known failure, you'll be warned.
+    FEATURES:
+    - Conflict detection: Warns if this contradicts a past failure
+    - File association: Link memories to specific files
+    - Auto-permanent: Patterns and warnings don't decay (they're project facts)
 
     Use this immediately when:
     - Making an architectural decision
@@ -83,6 +96,7 @@ async def remember(
         rationale: Why this is important / the reasoning behind it
         context: Structured context (files involved, alternatives considered, etc.)
         tags: Tags for easier retrieval (e.g., ['auth', 'security', 'api'])
+        file_path: Optional file path to associate this memory with
 
     Returns:
         The created memory with its ID, plus any conflict warnings
@@ -94,7 +108,10 @@ async def remember(
 
         remember("warning", "Don't use sync DB calls in request handlers",
                  rationale="Caused timeout issues in production",
-                 context={"file": "api/handlers.py"})
+                 file_path="api/handlers.py")
+
+        remember("pattern", "All API routes must have rate limiting",
+                 file_path="api/routes.py")
     """
     await db_manager.init_db()
     return await memory_manager.remember(
@@ -102,7 +119,8 @@ async def remember(
         content=content,
         rationale=rationale,
         context=context,
-        tags=tags
+        tags=tags,
+        file_path=file_path
     )
 
 
@@ -287,6 +305,65 @@ async def record_outcome(
 
 
 # ============================================================================
+# Helper: Git awareness
+# ============================================================================
+def _get_git_changes(since_date: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
+    """Get git changes since a given date."""
+    try:
+        # Check if we're in a git repo
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode != 0:
+            return None
+
+        git_info = {}
+
+        # Get recent commits
+        if since_date:
+            since_str = since_date.strftime("%Y-%m-%d")
+            cmd = ["git", "log", f"--since={since_str}", "--oneline", "-10"]
+        else:
+            cmd = ["git", "log", "--oneline", "-5"]
+
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        if result.returncode == 0 and result.stdout.strip():
+            git_info["recent_commits"] = result.stdout.strip().split("\n")
+
+        # Get changed files (uncommitted)
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            changes = result.stdout.strip().split("\n")
+            git_info["uncommitted_changes"] = [
+                {"status": line[:2].strip(), "file": line[3:]}
+                for line in changes if line.strip()
+            ]
+
+        # Get current branch
+        result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            git_info["branch"] = result.stdout.strip()
+
+        return git_info if git_info else None
+
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+        return None
+
+
+# ============================================================================
 # Tool 6: GET_BRIEFING - Smart session start summary
 # ============================================================================
 @mcp.tool()
@@ -303,6 +380,7 @@ async def get_briefing(
     - Active warnings (what to watch out for)
     - High-priority rules (what to always check)
     - Failed approaches (what not to repeat)
+    - Git changes since last memory (what happened while you were away)
 
     If you provide focus_areas, you'll also get relevant memories for those topics.
 
@@ -322,7 +400,20 @@ async def get_briefing(
     # Get statistics with learning insights
     stats = await memory_manager.get_statistics()
 
+    # Get most recent memory timestamp for git awareness
+    last_memory_date = None
+
     async with db_manager.get_session() as session:
+        # Get most recent memory
+        result = await session.execute(
+            select(Memory.created_at)
+            .order_by(Memory.created_at.desc())
+            .limit(1)
+        )
+        row = result.first()
+        if row:
+            last_memory_date = row[0]
+
         # Get recent decisions (last 5)
         result = await session.execute(
             select(Memory)
@@ -386,6 +477,9 @@ async def get_briefing(
             for r in result.scalars().all()
         ]
 
+    # Get git changes since last memory
+    git_changes = _get_git_changes(last_memory_date)
+
     # Pre-fetch memories for focus areas if specified
     focus_memories = {}
     if focus_areas:
@@ -411,6 +505,9 @@ async def get_briefing(
     if active_warnings:
         message_parts.append(f"{len(active_warnings)} active warnings.")
 
+    if git_changes and git_changes.get("uncommitted_changes"):
+        message_parts.append(f"📝 {len(git_changes['uncommitted_changes'])} uncommitted file(s).")
+
     if stats.get("learning_insights", {}).get("suggestion"):
         message_parts.append(stats["learning_insights"]["suggestion"])
 
@@ -421,6 +518,7 @@ async def get_briefing(
         "active_warnings": active_warnings,
         "failed_approaches": failed_approaches,
         "top_rules": top_rules,
+        "git_changes": git_changes,
         "focus_areas": focus_memories if focus_memories else None,
         "message": " ".join(message_parts)
     }
@@ -614,6 +712,38 @@ async def context_check(
             "✓ No concerns found, but always use good judgment"
         )
     }
+
+
+# ============================================================================
+# Tool 12: RECALL_FOR_FILE - Get memories for a specific file
+# ============================================================================
+@mcp.tool()
+async def recall_for_file(
+    file_path: str,
+    limit: int = 10
+) -> Dict[str, Any]:
+    """
+    Get all memories associated with a specific file.
+
+    Use this when opening or modifying a file to see:
+    - Past decisions about this file
+    - Patterns that apply
+    - Warnings about potential issues
+    - Failed approaches to avoid
+
+    Args:
+        file_path: The file path to look up
+        limit: Max memories to return (default: 10)
+
+    Returns:
+        Memories organized by category with warning indicators
+
+    Example:
+        recall_for_file("api/handlers.py")
+        recall_for_file("src/components/Auth.tsx")
+    """
+    await db_manager.init_db()
+    return await memory_manager.recall_for_file(file_path=file_path, limit=limit)
 
 
 # ============================================================================
