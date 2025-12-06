@@ -9,8 +9,9 @@ A smarter MCP server that provides:
 5. Outcome tracking for continuous learning
 6. File-level memory associations
 7. Git awareness (shows changes since last session)
+8. Tech debt scanning (finds TODO/FIXME/HACK comments)
 
-12 Tools:
+13 Tools:
 - remember: Store a decision, pattern, warning, or learning (with file association)
 - recall: Retrieve relevant memories for a topic (semantic search)
 - recall_for_file: Get all memories for a specific file
@@ -23,12 +24,16 @@ A smarter MCP server that provides:
 - list_rules: Show all rules
 - update_rule: Modify existing rule
 - find_related: Discover connected memories
+- scan_todos: Find TODO/FIXME/HACK comments and track as tech debt
 """
 
 import sys
+import os
+import re
 import logging
 import atexit
 import subprocess
+from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
 
@@ -744,6 +749,181 @@ async def recall_for_file(
     """
     await db_manager.init_db()
     return await memory_manager.recall_for_file(file_path=file_path, limit=limit)
+
+
+# ============================================================================
+# Helper: TODO/FIXME Scanner
+# ============================================================================
+# Pattern matches TODO, FIXME, HACK, XXX, BUG, NOTE with optional colon and content
+TODO_PATTERN = re.compile(
+    r'(?:#|//|/\*|\*|--|<!--|\'\'\'|""")\s*'  # Comment markers
+    r'(TODO|FIXME|HACK|XXX|BUG)\s*'  # Keywords (NOT matching NOTE - too noisy)
+    r':?\s*'  # Optional colon
+    r'(.+?)(?:\*/|-->|\'\'\'|"""|$)',  # Content until end marker
+    re.IGNORECASE
+)
+
+# File extensions to scan
+SCANNABLE_EXTENSIONS = {
+    '.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.c', '.cpp', '.h', '.hpp',
+    '.go', '.rs', '.rb', '.php', '.swift', '.kt', '.scala', '.sh', '.bash',
+    '.html', '.css', '.scss', '.sass', '.less', '.vue', '.svelte',
+    '.sql', '.yaml', '.yml', '.toml', '.json', '.md', '.rst', '.txt'
+}
+
+# Directories to skip
+SKIP_DIRS = {
+    '.git', '.svn', '.hg', 'node_modules', '__pycache__', '.pytest_cache',
+    'venv', '.venv', 'env', '.env', 'dist', 'build', '.tox', '.eggs',
+    '*.egg-info', '.mypy_cache', '.coverage', 'htmlcov', '.devilmcp'
+}
+
+
+def _scan_for_todos(root_path: str, max_files: int = 500) -> List[Dict[str, Any]]:
+    """Scan directory for TODO/FIXME/HACK comments."""
+    todos = []
+    files_scanned = 0
+    root = Path(root_path)
+
+    if not root.exists():
+        return []
+
+    for file_path in root.rglob('*'):
+        # Skip directories
+        if file_path.is_dir():
+            continue
+
+        # Check if any parent is a skip directory
+        skip = False
+        for part in file_path.parts:
+            if part in SKIP_DIRS or part.endswith('.egg-info'):
+                skip = True
+                break
+        if skip:
+            continue
+
+        # Check extension
+        if file_path.suffix.lower() not in SCANNABLE_EXTENSIONS:
+            continue
+
+        # Limit files scanned
+        files_scanned += 1
+        if files_scanned > max_files:
+            break
+
+        try:
+            content = file_path.read_text(encoding='utf-8', errors='ignore')
+            for line_num, line in enumerate(content.split('\n'), 1):
+                matches = TODO_PATTERN.findall(line)
+                for match in matches:
+                    keyword, text = match
+                    text = text.strip()
+                    if text and len(text) > 3:  # Skip empty or very short todos
+                        rel_path = str(file_path.relative_to(root))
+                        todos.append({
+                            'type': keyword.upper(),
+                            'content': text[:200],  # Truncate long content
+                            'file': rel_path,
+                            'line': line_num,
+                            'full_line': line.strip()[:300]
+                        })
+        except (OSError, UnicodeDecodeError):
+            continue
+
+    return todos
+
+
+# ============================================================================
+# Tool 13: SCAN_TODOS - Find tech debt in codebase
+# ============================================================================
+@mcp.tool()
+async def scan_todos(
+    path: Optional[str] = None,
+    auto_remember: bool = False,
+    types: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Scan the codebase for TODO, FIXME, HACK, XXX, and BUG comments.
+
+    Tech debt finder - discovers and optionally tracks code comments that
+    indicate incomplete work, known issues, or workarounds.
+
+    Args:
+        path: Directory to scan (defaults to current directory)
+        auto_remember: If True, automatically create warning memories for each TODO
+        types: Filter to specific types (e.g., ["FIXME", "HACK"]) - default: all
+
+    Returns:
+        List of found items grouped by type, with file locations
+
+    Examples:
+        scan_todos()  # Scan current directory
+        scan_todos(types=["FIXME", "HACK"])  # Only critical items
+        scan_todos(auto_remember=True)  # Scan and save as warnings
+    """
+    await db_manager.init_db()
+
+    scan_path = path or os.getcwd()
+    found_todos = _scan_for_todos(scan_path)
+
+    # Filter by types if specified
+    if types:
+        types_upper = [t.upper() for t in types]
+        found_todos = [t for t in found_todos if t['type'] in types_upper]
+
+    # Group by type
+    by_type: Dict[str, List] = {}
+    for todo in found_todos:
+        todo_type = todo['type']
+        if todo_type not in by_type:
+            by_type[todo_type] = []
+        by_type[todo_type].append(todo)
+
+    # Get existing todo-related memories to avoid duplicates
+    existing_todos = set()
+    async with db_manager.get_session() as session:
+        result = await session.execute(
+            select(Memory)
+            .where(Memory.tags.contains('"tech_debt"'))  # JSON contains check
+        )
+        for mem in result.scalars().all():
+            # Create a simple signature to check duplicates
+            if mem.file_path:
+                existing_todos.add(f"{mem.file_path}:{mem.content[:50]}")
+
+    # Auto-remember if requested
+    new_memories = []
+    if auto_remember:
+        for todo in found_todos:
+            sig = f"{todo['file']}:{todo['content'][:50]}"
+            if sig not in existing_todos:
+                memory = await memory_manager.remember(
+                    category='warning',
+                    content=f"{todo['type']}: {todo['content']}",
+                    rationale=f"Found in codebase at {todo['file']}:{todo['line']}",
+                    tags=['tech_debt', 'auto_scanned', todo['type'].lower()],
+                    file_path=todo['file']
+                )
+                new_memories.append(memory)
+                existing_todos.add(sig)  # Prevent duplicates in same scan
+
+    # Build summary
+    summary_parts = []
+    for todo_type in ['FIXME', 'HACK', 'BUG', 'XXX', 'TODO']:
+        if todo_type in by_type:
+            count = len(by_type[todo_type])
+            summary_parts.append(f"{count} {todo_type}")
+
+    return {
+        "total_found": len(found_todos),
+        "by_type": by_type,
+        "summary": ", ".join(summary_parts) if summary_parts else "No tech debt found",
+        "new_memories_created": len(new_memories) if auto_remember else 0,
+        "message": (
+            f"Found {len(found_todos)} tech debt items" +
+            (f", created {len(new_memories)} new warnings" if new_memories else "")
+        )
+    }
 
 
 # ============================================================================

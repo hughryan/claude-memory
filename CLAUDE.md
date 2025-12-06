@@ -32,7 +32,7 @@ pytest tests/ -v --asyncio-mode=auto
 
 ```
 devilmcp/
-├── server.py      # MCP server, 12 tools (FastMCP)
+├── server.py      # MCP server, 13 tools (FastMCP)
 ├── memory.py      # MemoryManager - semantic store/recall with decay
 ├── rules.py       # RulesEngine - TF-IDF matched decision trees
 ├── similarity.py  # TF-IDF index, cosine similarity, conflict detection
@@ -66,7 +66,7 @@ devilmcp/
 - **Failed decision boosting**: Failed outcomes are highlighted in recalls (1.5x boost)
 - **Git awareness**: Briefing shows changes since last memory
 
-## MCP Tools (12 total)
+## MCP Tools (13 total)
 
 Core:
 1. `remember` - Store a memory with conflict detection and file association
@@ -83,6 +83,7 @@ Utility:
 10. `list_rules` - Show all rules
 11. `update_rule` - Modify existing rule
 12. `find_related` - Discover connected memories
+13. `scan_todos` - Find TODO/FIXME/HACK comments in codebase
 
 ## Adding New Tools
 
@@ -110,11 +111,13 @@ async def my_tool(param: str) -> Dict[str, Any]:
 pytest tests/ -v --asyncio-mode=auto
 ```
 
-53 tests covering:
+77 tests covering:
 - Memory CRUD and semantic recall
 - TF-IDF indexing and similarity
+- Code symbol extraction
 - Memory decay calculations
 - Conflict detection
 - Rule matching and priority
 - File-level associations
+- TODO/FIXME scanner
 - All edge cases

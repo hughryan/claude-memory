@@ -77,7 +77,7 @@ When `check_rules` returns guidance:
 
 ---
 
-## AVAILABLE TOOLS (12 Total)
+## AVAILABLE TOOLS (13 Total)
 
 | Tool | Purpose | When to Use |
 |------|---------|-------------|
@@ -93,6 +93,7 @@ When `check_rules` returns guidance:
 | `list_rules()` | Show all rules | Reviewing configuration |
 | `search_memories(query)` | Search memories | Finding specific content |
 | `find_related(id)` | Related memories | Exploring connections |
+| `scan_todos(path)` | Find tech debt | Discovering TODO/FIXME/HACK comments |
 
 ---
 
@@ -181,4 +182,4 @@ After Result:   record_outcome(id, outcome, worked)
 
 ---
 
-*DevilMCP v2.1: Persistent memory with semantic understanding.*
+*DevilMCP v2.1.2: Persistent memory with semantic understanding, code symbol extraction, and tech debt scanning.*
