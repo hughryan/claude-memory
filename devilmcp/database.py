@@ -19,6 +19,7 @@ class DatabaseManager:
 
     Simplified from the original - no more tool initialization or complex migrations.
     Just creates tables and provides session management.
+    Auto-migrates existing databases on startup.
     """
 
     def __init__(self, storage_path: str = "./storage", db_name: str = "devilmcp.db"):
@@ -27,6 +28,7 @@ class DatabaseManager:
 
         self.db_path = self.storage_path / db_name
         self.db_url = f"sqlite+aiosqlite:///{self.db_path}"
+        self._migrated = False
 
         self.engine = create_async_engine(
             self.db_url,
@@ -40,8 +42,28 @@ class DatabaseManager:
             class_=AsyncSession
         )
 
+    def _run_migrations(self):
+        """Run schema migrations (sync, before async engine starts)."""
+        if self._migrated:
+            return
+
+        if self.db_path.exists():
+            try:
+                from .migrations import run_migrations
+                count, applied = run_migrations(str(self.db_path))
+                if count > 0:
+                    logger.info(f"Applied {count} migration(s): {applied}")
+            except Exception as e:
+                logger.warning(f"Migration check failed: {e}")
+
+        self._migrated = True
+
     async def init_db(self):
-        """Initialize the database tables."""
+        """Initialize the database tables and run migrations."""
+        # Run migrations first (sync operation on existing DB)
+        self._run_migrations()
+
+        # Then create any new tables
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info(f"Database initialized at {self.db_path}")
