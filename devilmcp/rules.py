@@ -3,8 +3,9 @@ Rules Engine - Decision trees and enforcement for AI agents.
 
 This module handles:
 - Storing rules (decision tree nodes)
-- Matching actions against rules
+- Semantic matching of actions against rules using TF-IDF
 - Providing guidance based on matching rules
+- Learning from rule effectiveness
 """
 
 import logging
@@ -14,40 +15,22 @@ from sqlalchemy import select, desc
 
 from .database import DatabaseManager
 from .models import Rule
-from .memory import extract_keywords, STOP_WORDS
+from .similarity import TFIDFIndex, tokenize
 
 logger = logging.getLogger(__name__)
 
 
-def match_score(action_keywords: set, rule_keywords: str) -> float:
-    """
-    Calculate how well an action matches a rule's trigger.
-
-    Returns score from 0.0 to 1.0.
-    """
-    if not action_keywords or not rule_keywords:
-        return 0.0
-
-    rule_kw_set = set(rule_keywords.lower().split())
-
-    if not rule_kw_set:
-        return 0.0
-
-    # Count matches
-    matches = len(action_keywords & rule_kw_set)
-
-    if matches == 0:
-        return 0.0
-
-    # Score based on what fraction of rule keywords are matched
-    score = matches / len(rule_kw_set)
-
-    return score
+def extract_keywords(text: str) -> str:
+    """Extract keywords from text for backward compatibility."""
+    tokens = tokenize(text)
+    return " ".join(sorted(set(tokens)))
 
 
 class RulesEngine:
     """
     Manages rules - the decision tree nodes that guide AI behavior.
+
+    Uses TF-IDF similarity for better matching than naive keyword overlap.
 
     A rule has:
     - trigger: What activates it (e.g., "adding new API endpoint")
@@ -59,6 +42,35 @@ class RulesEngine:
 
     def __init__(self, db_manager: DatabaseManager):
         self.db = db_manager
+        self._index: Optional[TFIDFIndex] = None
+        self._index_loaded = False
+
+    async def _ensure_index(self) -> TFIDFIndex:
+        """Ensure the TF-IDF index is loaded with all rules."""
+        if self._index is None:
+            self._index = TFIDFIndex()
+
+        if not self._index_loaded:
+            async with self.db.get_session() as session:
+                result = await session.execute(
+                    select(Rule).where(Rule.enabled == True)  # noqa: E712
+                )
+                rules = result.scalars().all()
+
+                for rule in rules:
+                    # Index the trigger text
+                    self._index.add_document(rule.id, rule.trigger)
+
+                self._index_loaded = True
+                logger.info(f"Loaded {len(rules)} rules into TF-IDF index")
+
+        return self._index
+
+    def _invalidate_index(self) -> None:
+        """Invalidate the index when rules change."""
+        self._index_loaded = False
+        if self._index:
+            self._index = None
 
     async def add_rule(
         self,
@@ -83,7 +95,7 @@ class RulesEngine:
         Returns:
             The created rule as a dict
         """
-        # Extract keywords from trigger for matching
+        # Extract keywords for backward compat
         trigger_keywords = extract_keywords(trigger)
 
         rule = Rule(
@@ -102,6 +114,10 @@ class RulesEngine:
             await session.flush()
             rule_id = rule.id
 
+            # Update index
+            index = await self._ensure_index()
+            index.add_document(rule_id, trigger)
+
             logger.info(f"Added rule: {trigger[:50]}...")
 
             return {
@@ -118,102 +134,112 @@ class RulesEngine:
     async def check_rules(
         self,
         action: str,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        threshold: float = 0.15
     ) -> Dict[str, Any]:
         """
         Check if an action triggers any rules and return guidance.
 
-        This is the enforcement function - the AI calls this before taking
-        an action to get relevant rules.
+        Uses TF-IDF semantic matching for better rule activation.
 
         Args:
             action: Description of what the AI is about to do
             context: Optional context (files involved, etc.)
+            threshold: Minimum similarity score to match (default: 0.15)
 
         Returns:
             Matching rules with combined guidance
         """
-        # Extract keywords from action
-        action_keywords = set(extract_keywords(action).split())
+        index = await self._ensure_index()
 
-        if not action_keywords:
+        # Search for matching rules using TF-IDF
+        matches = index.search(action, top_k=10, threshold=threshold)
+
+        if not matches:
             return {
                 "action": action,
                 "matched_rules": 0,
                 "guidance": None,
-                "message": "No actionable keywords found"
+                "message": "No rules match this action - proceed with caution"
             }
+
+        # Get full rule objects
+        rule_ids = [rule_id for rule_id, _ in matches]
+        score_map = {rule_id: score for rule_id, score in matches}
 
         async with self.db.get_session() as session:
-            # Get all enabled rules
             result = await session.execute(
                 select(Rule)
+                .where(Rule.id.in_(rule_ids))
                 .where(Rule.enabled == True)  # noqa: E712
-                .order_by(desc(Rule.priority))
             )
-            rules = result.scalars().all()
+            rules = {r.id: r for r in result.scalars().all()}
 
-            # Score and collect matching rules
-            matching = []
-            for rule in rules:
-                score = match_score(action_keywords, rule.trigger_keywords)
-                if score >= 0.3:  # Minimum match threshold
-                    matching.append((rule, score))
+        # Sort by priority then score
+        sorted_matches = sorted(
+            [(rule_id, score_map[rule_id], rules[rule_id])
+             for rule_id, _ in matches if rule_id in rules],
+            key=lambda x: (x[2].priority, x[1]),
+            reverse=True
+        )
 
-            if not matching:
-                return {
-                    "action": action,
-                    "matched_rules": 0,
-                    "guidance": None,
-                    "message": "No rules match this action - proceed with caution"
-                }
-
-            # Sort by priority then score
-            matching.sort(key=lambda x: (x[0].priority, x[1]), reverse=True)
-
-            # Combine guidance from matching rules
-            combined = {
-                "must_do": [],
-                "must_not": [],
-                "ask_first": [],
-                "warnings": []
-            }
-
-            matched_details = []
-            for rule, score in matching:
-                combined["must_do"].extend(rule.must_do)
-                combined["must_not"].extend(rule.must_not)
-                combined["ask_first"].extend(rule.ask_first)
-                combined["warnings"].extend(rule.warnings)
-
-                matched_details.append({
-                    "id": rule.id,
-                    "trigger": rule.trigger,
-                    "match_score": round(score, 2),
-                    "priority": rule.priority
-                })
-
-            # Deduplicate
-            combined["must_do"] = list(dict.fromkeys(combined["must_do"]))
-            combined["must_not"] = list(dict.fromkeys(combined["must_not"]))
-            combined["ask_first"] = list(dict.fromkeys(combined["ask_first"]))
-            combined["warnings"] = list(dict.fromkeys(combined["warnings"]))
-
-            # Build response
-            has_blockers = len(combined["must_not"]) > 0 or len(combined["warnings"]) > 0
-
+        if not sorted_matches:
             return {
                 "action": action,
-                "matched_rules": len(matching),
-                "rules": matched_details,
-                "guidance": combined,
-                "has_blockers": has_blockers,
-                "message": (
-                    "STOP: Review warnings and must_not items before proceeding"
-                    if has_blockers else
-                    "Rules matched - review must_do items"
-                )
+                "matched_rules": 0,
+                "guidance": None,
+                "message": "No active rules match this action"
             }
+
+        # Combine guidance from matching rules
+        combined = {
+            "must_do": [],
+            "must_not": [],
+            "ask_first": [],
+            "warnings": []
+        }
+
+        matched_details = []
+        for rule_id, score, rule in sorted_matches:
+            combined["must_do"].extend(rule.must_do)
+            combined["must_not"].extend(rule.must_not)
+            combined["ask_first"].extend(rule.ask_first)
+            combined["warnings"].extend(rule.warnings)
+
+            matched_details.append({
+                "id": rule.id,
+                "trigger": rule.trigger,
+                "match_score": round(score, 3),
+                "priority": rule.priority
+            })
+
+        # Deduplicate while preserving order
+        combined["must_do"] = list(dict.fromkeys(combined["must_do"]))
+        combined["must_not"] = list(dict.fromkeys(combined["must_not"]))
+        combined["ask_first"] = list(dict.fromkeys(combined["ask_first"]))
+        combined["warnings"] = list(dict.fromkeys(combined["warnings"]))
+
+        # Determine severity
+        has_blockers = len(combined["must_not"]) > 0 or len(combined["warnings"]) > 0
+
+        # Build actionable message
+        if has_blockers:
+            message = "⚠️ STOP: Review warnings and must_not items before proceeding"
+        elif combined["ask_first"]:
+            message = "❓ Consider these questions before proceeding"
+        elif combined["must_do"]:
+            message = "✓ Rules matched - follow the must_do checklist"
+        else:
+            message = "Rules matched but no specific guidance"
+
+        return {
+            "action": action,
+            "matched_rules": len(sorted_matches),
+            "rules": matched_details,
+            "guidance": combined,
+            "has_blockers": has_blockers,
+            "message": message
+        }
 
     async def list_rules(
         self,
@@ -279,6 +305,8 @@ class RulesEngine:
                 rule.priority = priority
             if enabled is not None:
                 rule.enabled = enabled
+                # Invalidate index if enabled status changed
+                self._invalidate_index()
 
             return {
                 "id": rule.id,
@@ -299,6 +327,9 @@ class RulesEngine:
 
             trigger = rule.trigger
             await session.delete(rule)
+
+            # Invalidate index
+            self._invalidate_index()
 
             return {
                 "deleted": True,
@@ -328,3 +359,39 @@ class RulesEngine:
                 "trigger": rule.trigger,
                 "warnings": rule.warnings
             }
+
+    async def find_similar_rules(
+        self,
+        trigger: str,
+        limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Find rules similar to a given trigger.
+
+        Useful for avoiding duplicate rules.
+        """
+        index = await self._ensure_index()
+        matches = index.search(trigger, top_k=limit, threshold=0.2)
+
+        if not matches:
+            return []
+
+        rule_ids = [rule_id for rule_id, _ in matches]
+        score_map = {rule_id: score for rule_id, score in matches}
+
+        async with self.db.get_session() as session:
+            result = await session.execute(
+                select(Rule).where(Rule.id.in_(rule_ids))
+            )
+            rules = result.scalars().all()
+
+            return [
+                {
+                    "id": r.id,
+                    "trigger": r.trigger,
+                    "similarity": round(score_map[r.id], 3),
+                    "must_do_count": len(r.must_do),
+                    "warnings_count": len(r.warnings)
+                }
+                for r in rules
+            ]

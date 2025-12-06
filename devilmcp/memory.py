@@ -3,11 +3,12 @@ Memory Manager - The core of DevilMCP's AI memory system.
 
 This module handles:
 - Storing memories (decisions, patterns, warnings, learnings)
-- Semantic-ish retrieval based on keywords and tags
+- Semantic retrieval using TF-IDF similarity
+- Time-based memory decay
+- Conflict detection
 - Outcome tracking for learning
 """
 
-import re
 import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
@@ -15,95 +16,64 @@ from sqlalchemy import select, or_, func, desc
 
 from .database import DatabaseManager
 from .models import Memory
+from .similarity import (
+    TFIDFIndex,
+    tokenize,
+    calculate_memory_decay,
+    detect_conflict,
+    get_global_index,
+    STOP_WORDS
+)
 
 logger = logging.getLogger(__name__)
-
-# Common stop words to filter out from keyword extraction
-STOP_WORDS = {
-    'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-    'should', 'may', 'might', 'must', 'shall', 'can', 'need', 'dare',
-    'ought', 'used', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by',
-    'from', 'as', 'into', 'through', 'during', 'before', 'after', 'above',
-    'below', 'between', 'under', 'again', 'further', 'then', 'once', 'here',
-    'there', 'when', 'where', 'why', 'how', 'all', 'each', 'few', 'more',
-    'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own',
-    'same', 'so', 'than', 'too', 'very', 'just', 'and', 'but', 'if', 'or',
-    'because', 'until', 'while', 'this', 'that', 'these', 'those', 'it',
-    'its', 'we', 'they', 'them', 'what', 'which', 'who', 'whom', 'i', 'you',
-    'he', 'she', 'use', 'using', 'used'
-}
 
 
 def extract_keywords(text: str, tags: Optional[List[str]] = None) -> str:
     """
-    Extract meaningful keywords from text for search indexing.
-
-    Simple but effective: lowercase, split on non-alphanumeric, filter stop words.
-    Returns space-separated keywords.
+    Extract keywords from text for backward compatibility.
+    Uses the new tokenizer under the hood.
     """
-    if not text:
-        return ""
-
-    # Normalize and split
-    words = re.findall(r'[a-zA-Z0-9]+', text.lower())
-
-    # Filter stop words and short words
-    keywords = [w for w in words if w not in STOP_WORDS and len(w) > 2]
-
-    # Add tags (already meaningful)
+    tokens = tokenize(text)
     if tags:
-        keywords.extend([t.lower() for t in tags])
-
-    # Deduplicate while preserving order
-    seen = set()
-    unique = []
-    for kw in keywords:
-        if kw not in seen:
-            seen.add(kw)
-            unique.append(kw)
-
-    return " ".join(unique)
-
-
-def calculate_relevance(query_keywords: set, memory_keywords: str, memory_tags: list) -> float:
-    """
-    Calculate relevance score between query and memory.
-
-    Returns a score from 0.0 to 1.0.
-    """
-    if not query_keywords:
-        return 0.0
-
-    memory_kw_set = set(memory_keywords.lower().split()) if memory_keywords else set()
-    tag_set = set(t.lower() for t in memory_tags) if memory_tags else set()
-
-    all_memory_terms = memory_kw_set | tag_set
-
-    if not all_memory_terms:
-        return 0.0
-
-    # Count matches
-    matches = len(query_keywords & all_memory_terms)
-
-    # Jaccard-ish similarity with boost for matches
-    score = matches / len(query_keywords)
-
-    # Boost exact tag matches
-    tag_matches = len(query_keywords & tag_set)
-    if tag_matches > 0:
-        score += 0.2 * tag_matches
-
-    return min(score, 1.0)
+        for tag in tags:
+            tokens.extend(tokenize(tag))
+    return " ".join(sorted(set(tokens)))
 
 
 class MemoryManager:
     """
     Manages AI memories - storing, retrieving, and learning from them.
+
+    Uses TF-IDF similarity for semantic matching instead of naive keyword overlap.
+    Applies memory decay to favor recent memories.
+    Detects conflicts with existing memories.
     """
 
     def __init__(self, db_manager: DatabaseManager):
         self.db = db_manager
+        self._index: Optional[TFIDFIndex] = None
+        self._index_loaded = False
+
+    async def _ensure_index(self) -> TFIDFIndex:
+        """Ensure the TF-IDF index is loaded with all memories."""
+        if self._index is None:
+            self._index = TFIDFIndex()
+
+        if not self._index_loaded:
+            async with self.db.get_session() as session:
+                result = await session.execute(select(Memory))
+                memories = result.scalars().all()
+
+                for mem in memories:
+                    text = mem.content
+                    if mem.rationale:
+                        text += " " + mem.rationale
+                    self._index.add_document(mem.id, text, mem.tags)
+
+                self._index_loaded = True
+                logger.info(f"Loaded {len(memories)} memories into TF-IDF index")
+
+        return self._index
 
     async def remember(
         self,
@@ -114,7 +84,7 @@ class MemoryManager:
         tags: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
-        Store a new memory.
+        Store a new memory with conflict detection.
 
         Args:
             category: One of 'decision', 'pattern', 'warning', 'learning'
@@ -124,16 +94,19 @@ class MemoryManager:
             tags: Tags for retrieval
 
         Returns:
-            The created memory as a dict
+            The created memory as a dict, with any detected conflicts
         """
         valid_categories = {'decision', 'pattern', 'warning', 'learning'}
         if category not in valid_categories:
             return {"error": f"Invalid category. Must be one of: {valid_categories}"}
 
-        # Extract keywords for search
+        # Extract keywords for backward compat (legacy search)
         keywords = extract_keywords(content, tags)
         if rationale:
             keywords = keywords + " " + extract_keywords(rationale)
+
+        # Check for conflicts before storing
+        conflicts = await self._check_conflicts(content, tags)
 
         memory = Memory(
             category=category,
@@ -149,9 +122,16 @@ class MemoryManager:
             await session.flush()
             memory_id = memory.id
 
+            # Add to index
+            index = await self._ensure_index()
+            text = content
+            if rationale:
+                text += " " + rationale
+            index.add_document(memory_id, text, tags)
+
             logger.info(f"Stored {category}: {content[:50]}...")
 
-            return {
+            result = {
                 "id": memory_id,
                 "category": category,
                 "content": content,
@@ -160,98 +140,166 @@ class MemoryManager:
                 "created_at": memory.created_at.isoformat()
             }
 
+            # Add conflict warnings if any
+            if conflicts:
+                result["conflicts"] = conflicts
+                result["warning"] = f"Found {len(conflicts)} potential conflict(s) with existing memories"
+
+            return result
+
+    async def _check_conflicts(
+        self,
+        content: str,
+        tags: Optional[List[str]] = None
+    ) -> List[Dict]:
+        """Check for conflicts with existing memories."""
+        async with self.db.get_session() as session:
+            # Get recent memories that might conflict
+            result = await session.execute(
+                select(Memory)
+                .order_by(desc(Memory.created_at))
+                .limit(100)  # Check against recent memories
+            )
+            existing = [
+                {
+                    'id': m.id,
+                    'content': m.content,
+                    'category': m.category,
+                    'worked': m.worked,
+                    'outcome': m.outcome,
+                    'tags': m.tags
+                }
+                for m in result.scalars().all()
+            ]
+
+        return detect_conflict(content, existing, similarity_threshold=0.5)
+
     async def recall(
         self,
         topic: str,
         categories: Optional[List[str]] = None,
         limit: int = 10,
-        include_warnings: bool = True
+        include_warnings: bool = True,
+        decay_half_life_days: float = 30.0
     ) -> Dict[str, Any]:
         """
-        Recall memories relevant to a topic.
+        Recall memories relevant to a topic using semantic similarity.
 
-        This is the core "active memory" function - it finds relevant memories
-        and returns them organized by category.
+        This is the core "active memory" function. It:
+        1. Uses TF-IDF to find semantically similar memories
+        2. Applies time decay to favor recent memories
+        3. Boosts failed decisions (they're important warnings)
+        4. Organizes by category
 
         Args:
-            topic: What you're looking for (will be keyword-matched)
+            topic: What you're looking for
             categories: Limit to specific categories (default: all)
             limit: Max memories per category
             include_warnings: Always include warnings even if not in categories
+            decay_half_life_days: How quickly old memories lose relevance
 
         Returns:
             Dict with categorized memories and relevance scores
         """
-        # Extract query keywords
-        query_keywords = set(extract_keywords(topic).split())
+        index = await self._ensure_index()
 
-        if not query_keywords:
-            return {"memories": [], "message": "No searchable terms in topic"}
+        # Search using TF-IDF
+        search_results = index.search(topic, top_k=limit * 4, threshold=0.05)
+
+        if not search_results:
+            return {"memories": [], "message": "No relevant memories found", "topic": topic}
+
+        # Get full memory objects
+        memory_ids = [doc_id for doc_id, _ in search_results]
+        score_map = {doc_id: score for doc_id, score in search_results}
 
         async with self.db.get_session() as session:
-            # Build base query
-            query = select(Memory)
+            result = await session.execute(
+                select(Memory).where(Memory.id.in_(memory_ids))
+            )
+            memories = {m.id: m for m in result.scalars().all()}
 
-            # Category filter
+        # Score with decay and organize
+        scored_memories = []
+        for mem_id, base_score in search_results:
+            mem = memories.get(mem_id)
+            if not mem:
+                continue
+
+            # Apply category filter
             if categories:
-                if include_warnings and 'warning' not in categories:
-                    categories = list(categories) + ['warning']
-                query = query.where(Memory.category.in_(categories))
+                cats = list(categories)
+                if include_warnings and 'warning' not in cats:
+                    cats.append('warning')
+                if mem.category not in cats:
+                    continue
 
-            # Keyword search - find memories that have any of our keywords
-            # SQLite LIKE is case-insensitive by default
-            keyword_conditions = []
-            for kw in query_keywords:
-                keyword_conditions.append(Memory.keywords.like(f"%{kw}%"))
-                keyword_conditions.append(Memory.content.like(f"%{kw}%"))
+            # Calculate final score with decay
+            decay = calculate_memory_decay(mem.created_at, decay_half_life_days)
+            final_score = base_score * decay
 
-            query = query.where(or_(*keyword_conditions))
-            query = query.order_by(desc(Memory.created_at))
-            query = query.limit(limit * 3)  # Fetch more to re-rank
+            # Boost failed decisions - they're valuable warnings
+            if mem.worked is False:
+                final_score *= 1.5
 
-            result = await session.execute(query)
-            memories = result.scalars().all()
+            # Boost warnings
+            if mem.category == 'warning':
+                final_score *= 1.2
 
-            # Score and sort by relevance
-            scored = []
-            for mem in memories:
-                score = calculate_relevance(query_keywords, mem.keywords, mem.tags)
-                if score > 0.1:  # Minimum relevance threshold
-                    scored.append((mem, score))
+            scored_memories.append((mem, final_score, base_score, decay))
 
-            scored.sort(key=lambda x: x[1], reverse=True)
+        # Sort by final score
+        scored_memories.sort(key=lambda x: x[1], reverse=True)
 
-            # Organize by category
-            by_category = {
-                'decisions': [],
-                'patterns': [],
-                'warnings': [],
-                'learnings': []
-            }
+        # Organize by category
+        by_category = {
+            'decisions': [],
+            'patterns': [],
+            'warnings': [],
+            'learnings': []
+        }
 
-            for mem, score in scored[:limit * 2]:
-                cat_key = mem.category + 's'  # decision -> decisions
-                if cat_key in by_category and len(by_category[cat_key]) < limit:
-                    by_category[cat_key].append({
-                        'id': mem.id,
-                        'content': mem.content,
-                        'rationale': mem.rationale,
-                        'context': mem.context,
-                        'tags': mem.tags,
-                        'relevance': round(score, 2),
-                        'outcome': mem.outcome,
-                        'worked': mem.worked,
-                        'created_at': mem.created_at.isoformat()
-                    })
+        for mem, final_score, base_score, decay in scored_memories:
+            cat_key = mem.category + 's'  # decision -> decisions
+            if cat_key in by_category and len(by_category[cat_key]) < limit:
+                mem_dict = {
+                    'id': mem.id,
+                    'content': mem.content,
+                    'rationale': mem.rationale,
+                    'context': mem.context,
+                    'tags': mem.tags,
+                    'relevance': round(final_score, 3),
+                    'semantic_match': round(base_score, 3),
+                    'recency_weight': round(decay, 3),
+                    'outcome': mem.outcome,
+                    'worked': mem.worked,
+                    'created_at': mem.created_at.isoformat()
+                }
 
-            # Count total found
-            total = sum(len(v) for v in by_category.values())
+                # Add warning annotation for failed decisions
+                if mem.worked is False:
+                    mem_dict['_warning'] = f"⚠️ This approach FAILED: {mem.outcome or 'no details recorded'}"
 
-            return {
-                'topic': topic,
-                'found': total,
-                **by_category
-            }
+                by_category[cat_key].append(mem_dict)
+
+        total = sum(len(v) for v in by_category.values())
+
+        # Generate summary
+        summary_parts = []
+        if by_category['warnings']:
+            summary_parts.append(f"{len(by_category['warnings'])} warnings")
+        if any(m.get('worked') is False for cat in by_category.values() for m in cat):
+            failed_count = sum(1 for cat in by_category.values() for m in cat if m.get('worked') is False)
+            summary_parts.append(f"{failed_count} failed approaches to avoid")
+        if by_category['patterns']:
+            summary_parts.append(f"{len(by_category['patterns'])} patterns to follow")
+
+        return {
+            'topic': topic,
+            'found': total,
+            'summary': " | ".join(summary_parts) if summary_parts else None,
+            **by_category
+        }
 
     async def record_outcome(
         self,
@@ -262,13 +310,16 @@ class MemoryManager:
         """
         Record the outcome of a decision/pattern to learn from it.
 
+        Failed outcomes are especially valuable - they become implicit warnings
+        that get boosted in future recalls.
+
         Args:
             memory_id: The memory to update
             outcome: What actually happened
             worked: Did it work out?
 
         Returns:
-            Updated memory or error
+            Updated memory with any auto-generated warnings
         """
         async with self.db.get_session() as session:
             result = await session.execute(
@@ -283,22 +334,32 @@ class MemoryManager:
             memory.worked = worked
             memory.updated_at = datetime.now(timezone.utc)
 
-            # If it didn't work, consider creating a warning from this
-            if not worked:
-                logger.info(f"Memory {memory_id} marked as failed - consider adding a warning")
-
-            return {
+            response = {
                 "id": memory_id,
                 "content": memory.content,
                 "outcome": outcome,
                 "worked": worked,
-                "message": "Outcome recorded" + (
-                    " - this failure will inform future recalls" if not worked else ""
-                )
             }
 
+            # If it failed, suggest creating an explicit warning
+            if not worked:
+                response["suggestion"] = {
+                    "action": "consider_warning",
+                    "message": "This failure will boost this memory in future recalls. Consider also creating an explicit warning with more context.",
+                    "example": f'remember("warning", "Avoid: {memory.content[:50]}...", rationale="{outcome}")'
+                }
+                logger.info(f"Memory {memory_id} marked as failed - will be boosted as warning")
+
+            response["message"] = (
+                "Outcome recorded - this failure will inform future recalls"
+                if not worked else
+                "Outcome recorded successfully"
+            )
+
+            return response
+
     async def get_statistics(self) -> Dict[str, Any]:
-        """Get memory statistics."""
+        """Get memory statistics with learning insights."""
         async with self.db.get_session() as session:
             # Count by category
             result = await session.execute(
@@ -322,6 +383,10 @@ class MemoryManager:
 
             total = sum(by_category.values())
 
+            # Calculate learning rate
+            outcomes_recorded = worked + failed
+            learning_rate = outcomes_recorded / total if total > 0 else 0
+
             return {
                 "total_memories": total,
                 "by_category": by_category,
@@ -329,6 +394,15 @@ class MemoryManager:
                     "worked": worked,
                     "failed": failed,
                     "pending": total - worked - failed
+                },
+                "learning_insights": {
+                    "outcome_tracking_rate": round(learning_rate, 2),
+                    "failure_rate": round(failed / outcomes_recorded, 2) if outcomes_recorded > 0 else None,
+                    "suggestion": (
+                        "Record more outcomes to improve memory quality"
+                        if learning_rate < 0.3 else
+                        "Good outcome tracking!" if learning_rate > 0.5 else None
+                    )
                 }
             }
 
@@ -338,31 +412,90 @@ class MemoryManager:
         limit: int = 20
     ) -> List[Dict[str, Any]]:
         """
-        Simple full-text search across all memories.
+        Search across all memories using semantic similarity.
+        """
+        index = await self._ensure_index()
+
+        # Search using TF-IDF
+        results = index.search(query, top_k=limit, threshold=0.05)
+
+        if not results:
+            # Fall back to text search for exact matches
+            async with self.db.get_session() as session:
+                result = await session.execute(
+                    select(Memory)
+                    .where(
+                        or_(
+                            Memory.content.like(f"%{query}%"),
+                            Memory.rationale.like(f"%{query}%")
+                        )
+                    )
+                    .order_by(desc(Memory.created_at))
+                    .limit(limit)
+                )
+                memories = result.scalars().all()
+
+                return [
+                    {
+                        'id': m.id,
+                        'category': m.category,
+                        'content': m.content,
+                        'rationale': m.rationale,
+                        'tags': m.tags,
+                        'relevance': 0.5,  # Exact match baseline
+                        'created_at': m.created_at.isoformat()
+                    }
+                    for m in memories
+                ]
+
+        # Get full memory objects
+        memory_ids = [doc_id for doc_id, _ in results]
+
+        async with self.db.get_session() as session:
+            result = await session.execute(
+                select(Memory).where(Memory.id.in_(memory_ids))
+            )
+            memories = {m.id: m for m in result.scalars().all()}
+
+        return [
+            {
+                'id': mem_id,
+                'category': memories[mem_id].category,
+                'content': memories[mem_id].content,
+                'rationale': memories[mem_id].rationale,
+                'tags': memories[mem_id].tags,
+                'relevance': round(score, 3),
+                'created_at': memories[mem_id].created_at.isoformat()
+            }
+            for mem_id, score in results
+            if mem_id in memories
+        ]
+
+    async def find_related(
+        self,
+        memory_id: int,
+        limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Find memories related to a specific memory.
+
+        Useful for exploring connected decisions/patterns.
         """
         async with self.db.get_session() as session:
             result = await session.execute(
-                select(Memory)
-                .where(
-                    or_(
-                        Memory.content.like(f"%{query}%"),
-                        Memory.rationale.like(f"%{query}%"),
-                        Memory.keywords.like(f"%{query}%")
-                    )
-                )
-                .order_by(desc(Memory.created_at))
-                .limit(limit)
+                select(Memory).where(Memory.id == memory_id)
             )
-            memories = result.scalars().all()
+            source = result.scalar_one_or_none()
 
-            return [
-                {
-                    'id': m.id,
-                    'category': m.category,
-                    'content': m.content,
-                    'rationale': m.rationale,
-                    'tags': m.tags,
-                    'created_at': m.created_at.isoformat()
-                }
-                for m in memories
-            ]
+            if not source:
+                return []
+
+        # Search using the source memory's content
+        text = source.content
+        if source.rationale:
+            text += " " + source.rationale
+
+        results = await self.search(text, limit=limit + 1)
+
+        # Filter out the source memory itself
+        return [r for r in results if r['id'] != memory_id][:limit]

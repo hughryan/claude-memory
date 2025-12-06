@@ -1,11 +1,15 @@
 # DevilMCP
 
-**AI Memory & Decision System** - Give AI agents persistent memory and consistent decision-making.
+**AI Memory & Decision System** - Give AI agents persistent memory and consistent decision-making with *actual* semantic understanding.
 
-DevilMCP solves "AI amnesia" by providing:
-- **Active Memory**: Store and retrieve decisions, patterns, warnings, and learnings
-- **Decision Trees**: Rules that guide AI behavior consistently
-- **Outcome Tracking**: Learn from what worked and what didn't
+## What's New in v2.1
+
+- **TF-IDF Semantic Search**: Real similarity matching, not just keyword overlap
+- **Memory Decay**: Recent memories weighted higher than old ones
+- **Conflict Detection**: Warns when new decisions contradict past failures
+- **Failed Decision Boosting**: Past mistakes surface prominently in recalls
+- **Smart Briefing**: Pre-fetch context for focus areas
+- **Context Check**: Combined recall + rules check in one call
 
 ## Why DevilMCP?
 
@@ -17,6 +21,14 @@ AI agents start each session fresh. They don't remember:
 **Markdown files don't solve this** - the AI has to know to read them and might ignore them.
 
 **DevilMCP provides ACTIVE memory** - it surfaces relevant context when the AI asks about a topic, enforces rules before actions, and learns from outcomes.
+
+### What Makes This Different
+
+Unlike keyword-based systems:
+- **Semantic matching**: "creating REST endpoint" matches rules about "adding API route"
+- **Time decay**: A decision from yesterday matters more than one from 6 months ago
+- **Conflict warnings**: "You tried this approach before and it failed"
+- **Learning loops**: Record outcomes, and failures get boosted in future recalls
 
 ## Quick Start
 
@@ -30,7 +42,7 @@ python -m devilmcp.server
 
 ## Core Tools
 
-### 1. `remember` - Store a memory
+### 1. `remember` - Store a memory (with conflict detection)
 ```python
 remember(
     category="decision",  # decision, pattern, warning, or learning
@@ -38,12 +50,14 @@ remember(
     rationale="Need stateless auth for horizontal scaling",
     tags=["auth", "architecture"]
 )
+# Returns: memory ID, plus any conflict warnings
 ```
 
-### 2. `recall` - Retrieve relevant memories
+### 2. `recall` - Semantic memory retrieval
 ```python
 recall("authentication")
 # Returns: decisions, patterns, warnings, learnings about auth
+# Sorted by: semantic relevance × recency × importance
 ```
 
 ### 3. `add_rule` - Create decision tree nodes
@@ -56,21 +70,32 @@ add_rule(
 )
 ```
 
-### 4. `check_rules` - Validate actions against rules
+### 4. `check_rules` - Semantic rule matching
 ```python
-check_rules("I'm adding a new API endpoint")
-# Returns: matching rules, combined guidance, warnings
+check_rules("creating a new REST route")
+# Matches rules about "API endpoints" via semantic similarity
+# Returns: combined must_do, must_not, warnings
 ```
 
-### 5. `record_outcome` - Track what worked
+### 5. `record_outcome` - Learn from results
 ```python
 record_outcome(memory_id=42, outcome="JWT auth works great", worked=True)
+record_outcome(memory_id=43, outcome="Caching caused stale data", worked=False)
+# Failed decisions get boosted in future recalls
 ```
 
-### 6. `get_briefing` - Session start summary
+### 6. `get_briefing` - Smart session start
 ```python
-get_briefing()
-# Returns: stats, recent decisions, active warnings, top rules
+get_briefing(focus_areas=["authentication", "API"])
+# Returns: stats, recent decisions, warnings, failed approaches,
+# plus pre-fetched context for focus areas
+```
+
+### 7. `context_check` - Quick pre-flight check
+```python
+context_check("modifying the user authentication flow")
+# Combines recall + check_rules in one call
+# Returns: relevant memories, matching rules, all warnings
 ```
 
 ## MCP Configuration
@@ -97,35 +122,18 @@ Add to your config file:
 }
 ```
 
-### Cursor IDE
-Add to `~/.cursor/mcp.json`:
-```json
-{
-  "mcpServers": {
-    "devilmcp": {
-      "command": "python",
-      "args": ["-m", "devilmcp.server"],
-      "env": {
-        "PYTHONPATH": "/path/to/DevilMCP",
-        "DEVILMCP_PROJECT_ROOT": "/path/to/your/project"
-      }
-    }
-  }
-}
-```
-
 ## AI Agent Protocol
 
 ### At Session Start
 ```
-Call get_briefing() to load context
+Call get_briefing(focus_areas=["what", "you're", "working on"])
 ```
 
 ### Before Making Changes
 ```
-1. Call recall(topic) to get relevant memories
-2. Call check_rules(action) to get guidance
-3. Follow must_do items, avoid must_not items
+Call context_check("description of what you're doing")
+# Or for detailed info:
+Call recall(topic) and check_rules(action) separately
 ```
 
 ### When Making Decisions
@@ -136,7 +144,33 @@ Call remember(category="decision", content="...", rationale="...")
 ### After Implementing
 ```
 Call record_outcome(memory_id, outcome, worked)
+# Failures are especially valuable - they become warnings
 ```
+
+## How It Works
+
+### TF-IDF Similarity
+Instead of simple keyword matching, DevilMCP builds TF-IDF vectors for all stored memories and queries. This means:
+- "authentication" matches memories about "auth", "login", "OAuth"
+- Rare terms (like project-specific names) get higher weight
+- Common words are automatically de-emphasized
+
+### Memory Decay
+```
+weight = e^(-λt) where λ = ln(2)/half_life_days
+```
+Default half-life is 30 days. A 60-day-old memory has ~25% weight.
+Minimum weight floor prevents total loss of old context.
+
+### Conflict Detection
+When storing a new memory, it's compared against recent memories:
+- If similar content failed before → warning about the failure
+- If it matches an existing warning → warning surfaced
+- If highly similar content exists → potential duplicate flagged
+
+### Failed Decision Boosting
+Memories with `worked=False` get a 1.5x relevance boost in recalls.
+Warnings get a 1.2x boost. This ensures past mistakes surface prominently.
 
 ## Data Storage
 
@@ -144,15 +178,6 @@ Each project gets isolated storage at:
 ```
 <project_root>/.devilmcp/storage/devilmcp.db
 ```
-
-## Migration from v1
-
-If you have an existing DevilMCP database:
-```bash
-python scripts/migrate_to_v2.py /path/to/.devilmcp/storage/devilmcp.db
-```
-
-This converts old decisions, thoughts, and cascade events to the new memory format.
 
 ## Configuration
 
@@ -168,11 +193,12 @@ Environment variables (prefix: `DEVILMCP_`):
 
 ```
 devilmcp/
-├── server.py      # MCP server with 9 tools
-├── memory.py      # Memory storage & retrieval
-├── rules.py       # Decision tree / rule engine
+├── server.py      # MCP server with 11 tools
+├── memory.py      # Memory storage & semantic retrieval
+├── rules.py       # Rule engine with TF-IDF matching
+├── similarity.py  # TF-IDF index, decay, conflict detection
 ├── database.py    # SQLite async database
-├── models.py      # 3 tables: memories, rules, project_state
+├── models.py      # 2 tables: memories, rules
 └── config.py      # Pydantic settings
 ```
 
@@ -182,7 +208,7 @@ devilmcp/
 # Install in development mode
 pip install -e .
 
-# Run tests
+# Run tests (53 tests)
 pytest tests/ -v --asyncio-mode=auto
 
 # Run server directly
@@ -191,4 +217,4 @@ python -m devilmcp.server
 
 ---
 
-*DevilMCP: Because AI agents should remember what they learned.*
+*DevilMCP: Because AI agents should remember what they learned—and what went wrong.*

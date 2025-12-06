@@ -1,10 +1,9 @@
 """
 DevilMCP Models - Simplified schema focused on AI memory and decision trees.
 
-Only 3 tables:
+Only 2 tables:
 - memories: Stores decisions, patterns, warnings, learnings
 - rules: Decision tree nodes / enforcement rules
-- project_state: Cached project context
 """
 
 from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, Boolean
@@ -100,21 +99,5 @@ class Rule(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
-class ProjectState(Base):
-    """
-    Cached project state for quick briefings.
-    """
-    __tablename__ = "project_state"
-
-    id = Column(Integer, primary_key=True, index=True)
-    project_path = Column(String, unique=True, nullable=False, index=True)
-
-    # Cached summary data
-    summary = Column(JSON, default=dict)
-
-    # Statistics
-    memory_count = Column(Integer, default=0)
-    rule_count = Column(Integer, default=0)
-
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
-                       onupdate=lambda: datetime.now(timezone.utc))
+# Note: ProjectState table was removed in v2.1 as it was unused.
+# The briefing now computes statistics dynamically which is more accurate.
