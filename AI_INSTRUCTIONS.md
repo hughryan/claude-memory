@@ -40,6 +40,81 @@ After running these commands, inform the user:
 
 ---
 
+### STEP 2.5: CONFIGURE HOOKS FOR AUTOMATIC TOOL USAGE (Recommended)
+
+Claude Code hooks ensure Daem0nMCP tools are called automatically without relying on AI judgment. Add these hooks to your project's `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Daem0nMCP] Remember to call recall_for_file before modifying: $CLAUDE_FILE_PATH'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Daem0nMCP] Consider calling remember() to record this change'"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Daem0nMCP] Session active - use record_outcome() for completed work'"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**What These Hooks Do:**
+- **PreToolUse (Edit/Write)**: Reminds to check file memories before modifications
+- **PostToolUse (Edit/Write)**: Prompts to record decisions after changes
+- **Notification**: Periodic reminder to track outcomes
+
+**Alternative: User-Level Hooks**
+
+For hooks across ALL projects, add to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Daem0nMCP] Call get_briefing() to load project memory'"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Note:** Hooks provide reminders but cannot force tool calls. The AI must still execute the tools, but these reminders significantly improve compliance.
+
+---
+
 ### STEP 3: INITIALIZE MEMORY (Execute Immediately When Tools Available)
 
 **DO NOT WAIT. DO NOT ASK. CALL THIS NOW:**
