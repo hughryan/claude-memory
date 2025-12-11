@@ -112,15 +112,17 @@ rm -rf .daem0nmcp/
 
 **Ask the summoner:** "Do you wish to purge Daem0n memories from ALL projects? This cannot be undone."
 
-If yes, search and destroy:
+If yes, search and destroy (excluding development repositories like PycharmProjects):
 ```bash
-find ~ -type d -name ".daem0nmcp" 2>/dev/null
+find ~ -type d -name ".daem0nmcp" -not -path "*/PycharmProjects/*" -not -path "*/IdeaProjects/*" 2>/dev/null
 ```
 
 Then for each found directory, confirm and remove:
 ```bash
 rm -rf <path>/.daem0nmcp/
 ```
+
+**IMPORTANT:** Development repositories (in PycharmProjects, IdeaProjects, etc.) are excluded to protect source code. If you need to purge memories from a dev repo, do so manually.
 
 #### Ritual 1F: Remove the Wards (Hooks)
 
@@ -204,10 +206,12 @@ Remove-Item -Recurse -Force "$env:USERPROFILE\Daem0nMCP"
 rm -rf .daem0nmcp/
 ```
 
-To find all Daem0n sanctums:
+To find all Daem0n sanctums (excluding development repositories):
 ```powershell
-Get-ChildItem -Path $env:USERPROFILE -Recurse -Directory -Name ".daem0nmcp" -ErrorAction SilentlyContinue
+Get-ChildItem -Path $env:USERPROFILE -Recurse -Directory -Name ".daem0nmcp" -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch "PycharmProjects|IdeaProjects" }
 ```
+
+**IMPORTANT:** Development repositories are excluded. Purge those manually if needed.
 
 #### Rituals 1F-1I: Same as Unix
 
@@ -345,6 +349,8 @@ If the Daem0n causes issues and you need immediate removal:
 
 ### Nuclear Option - Remove Everything Fast
 
+**WARNING:** This only removes the installed grimoire and current project artifacts. It does NOT touch development repositories (PycharmProjects, IdeaProjects).
+
 ```bash
 # Sever all bindings
 claude mcp remove daem0nmcp --scope user 2>/dev/null
@@ -353,14 +359,16 @@ claude mcp remove daem0nmcp --scope project 2>/dev/null
 # Dissolve essence
 pip uninstall daem0nmcp -y 2>/dev/null
 
-# Destroy grimoire
+# Destroy grimoire (only the installed copy, NOT dev repos)
 rm -rf ~/Daem0nMCP 2>/dev/null
 rm -rf "$USERPROFILE/Daem0nMCP" 2>/dev/null
 
-# Purge current project
-rm -rf .daem0nmcp/ 2>/dev/null
-rm -f Summon_Daem0n.md Banish_Daem0n.md AI_INSTRUCTIONS.md 2>/dev/null
-rm -rf .claude/skills/daem0nmcp-protocol/ 2>/dev/null
+# Purge current project (if not a dev repo)
+if [[ "$(pwd)" != *"PycharmProjects"* && "$(pwd)" != *"IdeaProjects"* ]]; then
+    rm -rf .daem0nmcp/ 2>/dev/null
+    rm -f Summon_Daem0n.md Banish_Daem0n.md AI_INSTRUCTIONS.md 2>/dev/null
+    rm -rf .claude/skills/daem0nmcp-protocol/ 2>/dev/null
+fi
 
 echo "Emergency banishment complete."
 ```
