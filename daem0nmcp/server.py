@@ -93,8 +93,22 @@ class ProjectContext:
 # Cache of project contexts by normalized path
 _project_contexts: Dict[str, ProjectContext] = {}
 
-# Default project path (fallback for backward compatibility)
-_default_project_path: Optional[str] = os.environ.get('DAEM0NMCP_PROJECT_ROOT') or os.getcwd()
+# Default project path (ONLY used if DAEM0NMCP_PROJECT_ROOT is explicitly set)
+_default_project_path: Optional[str] = os.environ.get('DAEM0NMCP_PROJECT_ROOT')
+
+
+def _missing_project_path_error() -> Dict[str, Any]:
+    """Return an error dict when project_path is not provided."""
+    return {
+        "error": "MISSING_PROJECT_PATH",
+        "message": (
+            "The project_path parameter is REQUIRED. "
+            "The Daem0n serves multiple realms - you must specify which project's memories to access. "
+            "Pass your current working directory as project_path. "
+            "Example: project_path='C:/Users/you/projects/myapp' or project_path='/home/you/projects/myapp'"
+        ),
+        "hint": "Run 'pwd' in bash to get your current directory, or check your Claude Code session header."
+    }
 
 
 def _normalize_path(path: str) -> str:
@@ -234,6 +248,10 @@ async def remember(
         remember("pattern", "All API routes must have rate limiting",
                  file_path="api/routes.py")
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
     return await ctx.memory_manager.remember(
         category=category,
@@ -284,6 +302,10 @@ async def recall(
         recall("API endpoints", categories=["pattern", "warning"])
         recall("database")  # Before making DB changes
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
     return await ctx.memory_manager.recall(
         topic=topic,
@@ -344,6 +366,10 @@ async def add_rule(
             priority=10  # High priority
         )
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
     return await ctx.rules_engine.add_rule(
         trigger=trigger,
@@ -388,6 +414,10 @@ async def check_rules(
         check_rules("modifying the authentication middleware")
         check_rules("updating the database schema to add a new column")
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
     return await ctx.rules_engine.check_rules(action=action, context=context)
 
@@ -425,6 +455,10 @@ async def record_outcome(
         record_outcome(42, "JWT auth works well, no session issues", worked=True)
         record_outcome(43, "Caching caused stale data bugs", worked=False)
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
     return await ctx.memory_manager.record_outcome(
         memory_id=memory_id,
@@ -525,6 +559,10 @@ async def get_briefing(
         get_briefing(project_path="/path/to/project")  # Explicit project
         get_briefing(focus_areas=["authentication", "API"])  # With pre-loaded context
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
 
     # Get statistics with learning insights
@@ -677,6 +715,10 @@ async def search_memories(
     Returns:
         Matching memories ranked by relevance
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
     return await ctx.memory_manager.search(query=query, limit=limit)
 
@@ -701,6 +743,10 @@ async def list_rules(
     Returns:
         List of rules with their guidance
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
     return await ctx.rules_engine.list_rules(enabled_only=enabled_only, limit=limit)
 
@@ -735,6 +781,10 @@ async def update_rule(
     Returns:
         Updated rule or error
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
     return await ctx.rules_engine.update_rule(
         rule_id=rule_id,
@@ -774,6 +824,10 @@ async def find_related(
         # After seeing a decision about auth, find related patterns/warnings
         find_related(42)
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
     return await ctx.memory_manager.find_related(memory_id=memory_id, limit=limit)
 
@@ -802,6 +856,10 @@ async def context_check(
     Example:
         context_check("modifying the user authentication flow")
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
 
     # Get relevant memories
@@ -884,6 +942,10 @@ async def recall_for_file(
         recall_for_file("api/handlers.py")
         recall_for_file("src/components/Auth.tsx")
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
     return await ctx.memory_manager.recall_for_file(file_path=file_path, limit=limit)
 
@@ -1000,6 +1062,10 @@ async def scan_todos(
         scan_todos(types=["FIXME", "HACK"])  # Only critical items
         scan_todos(auto_remember=True)  # Scan and save as warnings
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
 
     # Use provided path, or fall back to project path
@@ -1135,6 +1201,10 @@ async def ingest_doc(
         ingest_doc("https://stripe.com/docs/api/charges", "stripe-charges")
         ingest_doc("https://react.dev/reference/react/hooks", "react-hooks")
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
 
     content = _fetch_and_extract(url)
@@ -1222,6 +1292,10 @@ async def propose_refactor(
     Example:
         propose_refactor("src/auth/handlers.py")
     """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
     ctx = await get_project_context(project_path)
 
     result = {

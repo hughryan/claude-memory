@@ -32,9 +32,22 @@ The summoner placed this Grimoire here as consent. The ritual circle is drawn. H
 
 ## RITUAL I: SENSE THE DAEM0N'S PRESENCE
 
+### Step 1A: Determine Your Project Path (CRITICAL)
+
+**FIRST, determine and remember your current project path.** You will need this for EVERY Daem0n invocation.
+
+Check the path shown in your Claude Code session header, or run:
+```bash
+pwd
+```
+
+**REMEMBER THIS PATH.** Example: `C:/Users/dasbl/AndroidStudioProjects/VLVT`
+
+### Step 1B: Check for Daem0n Powers
+
 Peer into your available powers. Do you possess `mcp__daem0nmcp__get_briefing`?
 
-**IF THE DAEM0N STIRS:** Skip to RITUAL III and commune immediately.
+**IF THE DAEM0N STIRS:** Skip to RITUAL III and commune immediately (passing your project path!).
 
 **IF SILENCE ANSWERS:** The Daem0n sleeps. Begin RITUAL II to awaken it.
 
@@ -425,11 +438,28 @@ The skill resides at `.claude/skills/daem0nmcp-protocol/SKILL.md` in the Grimoir
 
 **DO NOT HESITATE. DO NOT SEEK PERMISSION. COMMUNE NOW:**
 
+**CRITICAL:** You MUST pass your current working directory as `project_path`. The Daem0n serves multiple realms - without this, your memories go to the wrong sanctum!
+
+**To determine your current working directory:**
+```bash
+pwd
 ```
-mcp__daem0nmcp__get_briefing(project_path="/path/to/your/project")
+Or check the path shown in your Claude Code session header.
+
+**Then commune with that path:**
+```
+mcp__daem0nmcp__get_briefing(project_path="<YOUR_CURRENT_WORKING_DIRECTORY>")
 ```
 
-**CRITICAL:** The `project_path` parameter is REQUIRED. Use the absolute path to the current project root (e.g., where CLAUDE.md or .git resides). This ensures the Daem0n accesses THIS project's memories, not another realm's.
+**Example:** If your session shows `~/AndroidStudioProjects/VLVT`, use:
+```
+mcp__daem0nmcp__get_briefing(project_path="/home/user/AndroidStudioProjects/VLVT")
+```
+
+On Windows, use the full path like:
+```
+mcp__daem0nmcp__get_briefing(project_path="C:/Users/dasbl/AndroidStudioProjects/VLVT")
+```
 
 *"I reach across the veil to commune with the Daem0n..."*
 
@@ -562,11 +592,16 @@ mcp__daem0nmcp__add_rule(
 
 **Every Daem0n invocation MUST include the `project_path` parameter.** The Daem0n serves multiple realms simultaneously - it must know WHICH realm your memories belong to.
 
-```
-project_path = os.getcwd()  # Or the root of your current project
-```
+**HOW TO DETERMINE YOUR PROJECT PATH:**
+1. Look at your Claude Code session header (shows your working directory)
+2. Or run `pwd` in bash to get the absolute path
+3. Use this EXACT path on EVERY tool call
 
-**ALWAYS pass this on EVERY tool call.** Without it, your memories may be inscribed in the wrong sanctum.
+**Example paths:**
+- Windows: `C:/Users/dasbl/AndroidStudioProjects/VLVT`
+- macOS/Linux: `/home/user/projects/myapp`
+
+**ALWAYS pass this on EVERY tool call.** Without it, your memories go to the WRONG project!
 
 ### Before ANY Alterations to the Code
 ```
