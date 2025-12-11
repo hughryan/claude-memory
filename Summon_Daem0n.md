@@ -227,61 +227,45 @@ If other servers exist, add alongside them:
 }
 ```
 
-#### Incantation II-WIN-E: Light the Altar Flame
+#### Incantation II-WIN-E: Light the Altar Flame (Claude Does This Automatically)
 
-The Altar must burn BEFORE the portal opens.
+**YOU (Claude) must light the Altar yourself.** Do not ask the summoner to do this.
 
-**Option 1: The Ritual Candle (recommended)**
-
-```bash
-start "$USERPROFILE/Daem0nMCP/start_daem0nmcp_server.bat"
-```
-
-This opens a sacred window that must remain lit.
-
-**Option 2: Direct invocation**
+Cast this incantation to light the Altar in a separate window:
 
 ```bash
-python "$USERPROFILE/Daem0nMCP/start_server.py" --port 9876
+start "" "%USERPROFILE%\Daem0nMCP\start_daem0nmcp_server.bat"
 ```
 
-#### Incantation II-WIN-F: Verify the Altar Burns
+Wait 2-3 seconds for the Altar to ignite, then verify it burns:
 
-The Altar window should display:
-```
-============================================================
-Daem0nMCP HTTP Server - The Altar Burns
-============================================================
-URL: http://127.0.0.1:9876/mcp
-Project: <project_path>
-============================================================
-Press Ctrl+C to extinguish
+```bash
+curl -s http://localhost:9876/mcp 2>/dev/null && echo "Altar is lit!" || echo "Altar failed to ignite"
 ```
 
-#### Incantation II-WIN-G: Instruct the Summoner
+If the Altar fails to ignite, try the direct Python invocation in a new window:
+```bash
+start "" python "%USERPROFILE%\Daem0nMCP\start_server.py" --port 9876
+```
 
-Speak these words:
+#### Incantation II-WIN-F: Instruct the Summoner (After Lighting the Altar)
 
-> **The Altar of HTTP is constructed. The Daem0n can now manifest in the Windows realm.**
->
-> **IMPORTANT: In Windows, you must light the Altar before each summoning:**
->
-> 1. **Before opening Claude Code:** Run `start_daem0nmcp_server.bat` from the Daem0nMCP sanctum
-> 2. Keep that sacred window burning while communing with Claude
-> 3. Then open Claude Code in your project realm
-> 4. Upon return, I shall commune with the Daem0n
->
-> **Quick ignition (cast before each session):**
-> ```
-> %USERPROFILE%\Daem0nMCP\start_daem0nmcp_server.bat
-> ```
->
-> Or create a desktop talisman (shortcut) to the batch file for convenience.
+**Only after YOU have successfully lit the Altar**, speak these words:
 
-**HALT THE RITUAL.** Do not proceed until:
-1. The Altar flame burns (terminal showing "Daem0nMCP HTTP Server")
-2. The summoner reopens the portal
-3. `mcp__daem0nmcp__*` powers manifest
+> **The Altar of HTTP is lit and burning. The binding runes are inscribed.**
+>
+> **You must close and reopen the portal for the Daem0n to fully manifest:**
+> 1. Speak `/exit` or close this terminal
+> 2. Invoke `claude` again in this project realm
+> 3. Upon return, I shall commune with the Daem0n and report its memories
+>
+> **Note:** A sacred window has opened running the Daem0n server. Keep it burning (leave that terminal open) while communing with Claude. If you close it, the Daem0n will slumber.
+>
+> **For future sessions:** The Altar must be lit before opening Claude Code. You can:
+> - Run `%USERPROFILE%\Daem0nMCP\start_daem0nmcp_server.bat` before starting Claude
+> - Or add it to your Windows Startup folder for automatic ignition at login
+
+**HALT THE RITUAL.** Do not proceed until the summoner reopens the portal and `mcp__daem0nmcp__*` powers manifest.
 
 ---
 
