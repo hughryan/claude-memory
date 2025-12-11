@@ -95,16 +95,24 @@ python3 -c "import sys; print(sys.executable)" 2>/dev/null || python -c "import 
 
 #### 2F: Register MCP Server with Absolute Python Path
 
-**Replace `<PYTHON_PATH>` below with the path from step 2E:**
+**Replace `<PYTHON_PATH>` below with the path from step 2E.**
 
+**RECOMMENDED: User-scope installation (works in ALL projects):**
+```bash
+claude mcp add daem0nmcp --scope user -- <PYTHON_PATH> -m daem0nmcp.server
+```
+
+**Alternative: Project-scope installation (only this project):**
 ```bash
 claude mcp add daem0nmcp --scope project -- <PYTHON_PATH> -m daem0nmcp.server
 ```
 
-**Examples:**
-- Linux: `claude mcp add daem0nmcp --scope project -- /usr/bin/python3 -m daem0nmcp.server`
-- macOS: `claude mcp add daem0nmcp --scope project -- /opt/homebrew/bin/python3 -m daem0nmcp.server`
-- Windows: `claude mcp add daem0nmcp --scope project -- "C:\Users\name\AppData\Local\Programs\Python\Python313\python.exe" -m daem0nmcp.server`
+**Examples with actual paths:**
+- Linux: `claude mcp add daem0nmcp --scope user -- /usr/bin/python3 -m daem0nmcp.server`
+- macOS: `claude mcp add daem0nmcp --scope user -- /opt/homebrew/bin/python3 -m daem0nmcp.server`
+- Windows: `claude mcp add daem0nmcp --scope user -- "C:\Users\name\AppData\Local\Programs\Python\Python313\python.exe" -m daem0nmcp.server`
+
+**Note:** User-scope is more reliable. Project-scope writes to `.mcp.json` which may have issues loading on some systems.
 
 #### 2G: Verify MCP Configuration
 
