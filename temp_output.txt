@@ -1,0 +1,4 @@
+2025-12-21 11:01:20,910 - daem0nmcp.config - INFO - Project detected: Daem0n-MCP
+2025-12-21 11:01:20,910 - daem0nmcp.config - INFO - Using project-specific storage: C:\Users\dasbl\PycharmProjects\Daem0n-MCP\.daem0nmcp\storage
+2025-12-21 11:01:20,910 - daem0nmcp.server - INFO - Daem0nMCP Server initialized (default storage: C:\Users\dasbl\PycharmProjects\Daem0n-MCP\.daem0nmcp\storage)
+{"total": 0, "todos": []}
