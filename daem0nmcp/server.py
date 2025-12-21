@@ -68,6 +68,7 @@ try:
     from .models import Memory, Rule
     from . import __version__
     from . import vectors
+    from .logging_config import StructuredFormatter
 except ImportError:
     # For fastmcp run which executes server.py directly
     from daem0nmcp.config import settings
@@ -77,6 +78,7 @@ except ImportError:
     from daem0nmcp.models import Memory, Rule
     from daem0nmcp import __version__
     from daem0nmcp import vectors
+    from daem0nmcp.logging_config import StructuredFormatter
 from sqlalchemy import select, desc
 from dataclasses import dataclass
 
@@ -86,6 +88,14 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Configure structured logging (optional - only if env var set)
+if os.getenv('DAEM0NMCP_STRUCTURED_LOGS'):
+    handler = logging.StreamHandler()
+    handler.setFormatter(StructuredFormatter())
+    daem0n_logger = logging.getLogger('daem0nmcp')
+    daem0n_logger.addHandler(handler)
+    daem0n_logger.setLevel(logging.INFO)
 
 # Initialize FastMCP server
 mcp = FastMCP("Daem0nMCP")
