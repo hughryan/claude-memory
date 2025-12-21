@@ -7,7 +7,7 @@ Example: DAEM0NMCP_LOG_LEVEL=DEBUG
 
 import shutil
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from pydantic_settings import BaseSettings
 
 
@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     # Context management
     max_project_contexts: int = 10  # Maximum cached project contexts
     context_ttl_seconds: int = 3600  # 1 hour TTL for unused contexts
+
+    # Ingestion limits
+    max_content_size: int = 1_000_000  # 1MB max content
+    max_chunks: int = 50  # Maximum chunks per ingestion
+    ingest_timeout: int = 30  # Request timeout in seconds
+    allowed_url_schemes: List[str] = ["http", "https"]
 
     class Config:
         env_prefix = "DAEM0NMCP_"

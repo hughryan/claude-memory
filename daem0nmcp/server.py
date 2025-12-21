@@ -207,6 +207,12 @@ async def get_project_context(project_path: Optional[str] = None) -> ProjectCont
 MAX_PROJECT_CONTEXTS = settings.max_project_contexts
 CONTEXT_TTL_SECONDS = settings.context_ttl_seconds
 
+# Ingestion limits
+MAX_CONTENT_SIZE = settings.max_content_size
+MAX_CHUNKS = settings.max_chunks
+INGEST_TIMEOUT = settings.ingest_timeout
+ALLOWED_URL_SCHEMES = settings.allowed_url_schemes
+
 
 async def evict_stale_contexts() -> int:
     """
@@ -1228,8 +1234,65 @@ async def scan_todos(
 # ============================================================================
 # Helper: Web fetching for documentation ingestion
 # ============================================================================
+def _validate_url(url: str) -> Optional[str]:
+    """
+    Validate URL for ingestion.
+    Returns error message if invalid, None if valid.
+
+    Security checks:
+    - Scheme validation (no file://, etc.)
+    - SSRF protection: Blocks localhost and private IPs
+    - Cloud metadata endpoint protection
+    """
+    from urllib.parse import urlparse
+    import ipaddress
+    import socket
+
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return "Invalid URL format"
+
+    if parsed.scheme.lower() not in ALLOWED_URL_SCHEMES:
+        return f"Invalid URL scheme '{parsed.scheme}'. Allowed: {ALLOWED_URL_SCHEMES}"
+
+    if not parsed.netloc:
+        return "URL must have a host"
+
+    # Extract hostname from netloc (remove port)
+    hostname = parsed.hostname
+    if not hostname:
+        return "URL must have a valid hostname"
+
+    # Block localhost
+    if hostname.lower() in ['localhost', 'localhost.localdomain', '127.0.0.1', '::1']:
+        return "Localhost URLs are not allowed"
+
+    # Try to resolve and check for private/reserved IPs
+    try:
+        ip = socket.gethostbyname(hostname)
+        ip_obj = ipaddress.ip_address(ip)
+
+        # Block private, loopback, and link-local addresses
+        if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local:
+            return f"Private/internal IP addresses are not allowed: {ip}"
+
+        # Block cloud metadata endpoint
+        if str(ip_obj) == '169.254.169.254':
+            return "Cloud metadata endpoints are not allowed"
+
+    except socket.gaierror:
+        # Hostname could not be resolved - allow it to fail later at fetch time
+        pass
+    except ValueError:
+        # Not a valid IP address - allow it through
+        pass
+
+    return None
+
+
 def _fetch_and_extract(url: str) -> Optional[str]:
-    """Fetch URL and extract text content."""
+    """Fetch URL and extract text content with size limits."""
     try:
         import httpx
         from bs4 import BeautifulSoup
@@ -1237,11 +1300,23 @@ def _fetch_and_extract(url: str) -> Optional[str]:
         return None
 
     try:
-        with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+        with httpx.Client(timeout=float(INGEST_TIMEOUT), follow_redirects=False) as client:
             response = client.get(url)
             response.raise_for_status()
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            # Check content length header first
+            content_length = response.headers.get('content-length')
+            if content_length and int(content_length) > MAX_CONTENT_SIZE:
+                logger.warning(f"Content too large: {content_length} bytes")
+                return None
+
+            # Truncate if response is too large
+            text = response.text
+            if len(text) > MAX_CONTENT_SIZE:
+                logger.warning(f"Truncating content from {len(text)} to {MAX_CONTENT_SIZE}")
+                text = text[:MAX_CONTENT_SIZE]
+
+            soup = BeautifulSoup(text, 'html.parser')
 
             # Remove script and style elements
             for element in soup(['script', 'style', 'nav', 'footer', 'header']):
@@ -1298,13 +1373,29 @@ async def ingest_doc(
     if not project_path and not _default_project_path:
         return _missing_project_path_error()
 
+    # Validate input parameters
+    if chunk_size <= 0:
+        return {"error": "chunk_size must be positive", "url": url}
+
+    if chunk_size > MAX_CONTENT_SIZE:
+        return {"error": f"chunk_size cannot exceed {MAX_CONTENT_SIZE}", "url": url}
+
+    if not topic or not topic.strip():
+        return {"error": "topic cannot be empty", "url": url}
+
+    # Validate URL
+    url_error = _validate_url(url)
+    if url_error:
+        return {"error": url_error, "url": url}
+
     ctx = await get_project_context(project_path)
 
     content = _fetch_and_extract(url)
 
     if content is None:
         return {
-            "error": "Failed to fetch URL. Make sure httpx and beautifulsoup4 are installed: pip install daem0nmcp[web]",
+            "error": f"Failed to fetch URL. Ensure httpx and beautifulsoup4 are installed, "
+                     f"content is under {MAX_CONTENT_SIZE} bytes, and URL is accessible.",
             "url": url
         }
 
@@ -1314,7 +1405,7 @@ async def ingest_doc(
             "url": url
         }
 
-    # Chunk the content
+    # Chunk the content with limit
     chunks = []
     words = content.split()
     current_chunk = []
@@ -1324,13 +1415,16 @@ async def ingest_doc(
         word_len = len(word) + 1  # +1 for space
         if current_size + word_len > chunk_size and current_chunk:
             chunks.append(' '.join(current_chunk))
+            if len(chunks) >= MAX_CHUNKS:
+                logger.warning(f"Reached max chunks ({MAX_CHUNKS}), stopping")
+                break
             current_chunk = [word]
             current_size = word_len
         else:
             current_chunk.append(word)
             current_size += word_len
 
-    if current_chunk:
+    if current_chunk and len(chunks) < MAX_CHUNKS:
         chunks.append(' '.join(current_chunk))
 
     # Store each chunk as a learning
@@ -1351,6 +1445,7 @@ async def ingest_doc(
         "topic": topic,
         "chunks_created": len(chunks),
         "total_chars": len(content),
+        "truncated": len(chunks) >= MAX_CHUNKS,
         "message": f"Ingested {len(chunks)} chunks from {url}. Use recall('{topic}') to retrieve.",
         "memory_ids": [m.get('id') for m in memories_created if 'id' in m]
     }
