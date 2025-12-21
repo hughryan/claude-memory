@@ -54,3 +54,63 @@ class TestProjectContextConcurrency:
         assert all(c is contexts[0] for c in contexts)
         # init_db should only be called once due to locking
         assert init_count == 1, f"init_db called {init_count} times, expected 1"
+
+
+class TestProjectContextEviction:
+    """Test LRU/TTL eviction for project contexts."""
+
+    @pytest.fixture
+    def temp_projects(self):
+        """Create multiple temporary project directories."""
+        from daem0nmcp.server import MAX_PROJECT_CONTEXTS
+        # Create MAX_PROJECT_CONTEXTS + 3 directories to test eviction
+        dirs = [tempfile.mkdtemp() for _ in range(MAX_PROJECT_CONTEXTS + 3)]
+        yield dirs
+        for d in dirs:
+            shutil.rmtree(d, ignore_errors=True)
+
+    @pytest.mark.asyncio
+    async def test_lru_eviction_when_max_contexts_exceeded(self, temp_projects):
+        """Verify oldest contexts are evicted when max is exceeded."""
+        from daem0nmcp.server import (
+            get_project_context, _project_contexts,
+            evict_stale_contexts, MAX_PROJECT_CONTEXTS
+        )
+
+        _project_contexts.clear()
+
+        # Create contexts up to max + 2
+        for i, project_path in enumerate(temp_projects[:MAX_PROJECT_CONTEXTS + 2]):
+            ctx = await get_project_context(project_path)
+            ctx.last_accessed = i  # Simulate access order
+
+        # Evict stale contexts
+        evicted = await evict_stale_contexts()
+
+        # Should have evicted oldest contexts
+        assert len(_project_contexts) <= MAX_PROJECT_CONTEXTS
+        assert evicted >= 2
+
+    @pytest.mark.asyncio
+    async def test_ttl_eviction_for_old_contexts(self, temp_projects):
+        """Verify contexts older than TTL are evicted."""
+        import time
+        from daem0nmcp.server import (
+            get_project_context, _project_contexts,
+            evict_stale_contexts, CONTEXT_TTL_SECONDS
+        )
+
+        _project_contexts.clear()
+
+        # Create a context with old last_accessed time
+        ctx = await get_project_context(temp_projects[0])
+        ctx.last_accessed = time.time() - CONTEXT_TTL_SECONDS - 100
+
+        # Create a recent context
+        ctx2 = await get_project_context(temp_projects[1])
+
+        # Evict
+        await evict_stale_contexts()
+
+        # Old context should be gone, new one should remain
+        assert len(_project_contexts) == 1

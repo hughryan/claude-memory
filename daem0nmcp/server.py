@@ -157,6 +157,9 @@ async def get_project_context(project_path: Optional[str] = None) -> ProjectCont
         ctx = _project_contexts[normalized]
         if ctx.initialized:
             ctx.last_accessed = time.time()
+            # Opportunistic eviction: trigger background cleanup if over limit
+            if len(_project_contexts) > MAX_PROJECT_CONTEXTS:
+                asyncio.create_task(evict_stale_contexts())
             return ctx
 
     # Get or create lock for this project
@@ -198,6 +201,61 @@ async def get_project_context(project_path: Optional[str] = None) -> ProjectCont
         logger.info(f"Created project context for: {normalized} (storage: {storage_path})")
 
         return ctx
+
+
+# Configuration constants (read from settings)
+MAX_PROJECT_CONTEXTS = settings.max_project_contexts
+CONTEXT_TTL_SECONDS = settings.context_ttl_seconds
+
+
+async def evict_stale_contexts() -> int:
+    """
+    Evict stale project contexts based on LRU and TTL policies.
+
+    Returns the number of contexts evicted.
+    """
+    import time
+
+    evicted = 0
+    now = time.time()
+
+    async with _contexts_lock:
+        # First pass: TTL eviction
+        ttl_expired = [
+            path for path, ctx in _project_contexts.items()
+            if (now - ctx.last_accessed) > CONTEXT_TTL_SECONDS
+        ]
+
+        for path in ttl_expired:
+            ctx = _project_contexts.pop(path)
+            try:
+                await ctx.db_manager.close()
+            except Exception as e:
+                logger.warning(f"Error closing context for {path}: {e}")
+            evicted += 1
+            logger.info(f"Evicted TTL-expired context: {path}")
+
+        # Second pass: LRU eviction if still over limit
+        while len(_project_contexts) > MAX_PROJECT_CONTEXTS:
+            # Find oldest context
+            oldest_path = min(
+                _project_contexts.keys(),
+                key=lambda p: _project_contexts[p].last_accessed
+            )
+            ctx = _project_contexts.pop(oldest_path)
+            try:
+                await ctx.db_manager.close()
+            except Exception as e:
+                logger.warning(f"Error closing context for {oldest_path}: {e}")
+            evicted += 1
+            logger.info(f"Evicted LRU context: {oldest_path}")
+
+        # Clean up orphaned locks
+        orphaned_locks = set(_context_locks.keys()) - set(_project_contexts.keys())
+        for path in orphaned_locks:
+            del _context_locks[path]
+
+    return evicted
 
 
 async def cleanup_all_contexts():

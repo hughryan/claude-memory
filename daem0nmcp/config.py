@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     # Server
     log_level: str = "INFO"
 
+    # Context management
+    max_project_contexts: int = 10  # Maximum cached project contexts
+    context_ttl_seconds: int = 3600  # 1 hour TTL for unused contexts
+
     class Config:
         env_prefix = "DAEM0NMCP_"
         env_file = ".env"
