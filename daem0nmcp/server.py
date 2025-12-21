@@ -14,8 +14,9 @@ A smarter MCP server that provides:
 8. Tech debt scanning (finds TODO/FIXME/HACK comments)
 9. External documentation ingestion
 10. Refactor proposal generation
+11. Data export/import for backup and migration
 
-17 Tools:
+19 Tools:
 - remember: Store a decision, pattern, warning, or learning (with file association)
 - recall: Retrieve relevant memories for a topic (semantic search)
 - recall_for_file: Get all memories for a specific file
@@ -32,6 +33,8 @@ A smarter MCP server that provides:
 - ingest_doc: Fetch and store external documentation as learnings
 - propose_refactor: Generate refactor suggestions based on memory context
 - rebuild_index: Force rebuild of all search indexes
+- export_data: Export all memories and rules as JSON (backup/migration)
+- import_data: Import memories and rules from exported JSON
 - health: Get server health, version, and statistics
 """
 
@@ -42,6 +45,7 @@ import logging
 import atexit
 import subprocess
 import asyncio
+import base64
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
@@ -1607,6 +1611,164 @@ async def rebuild_index(
         "memories": memory_stats,
         "rules": rules_stats,
         "message": f"Rebuilt indexes: {memory_stats['memories_indexed']} memories, {rules_stats['rules_indexed']} rules"
+    }
+
+
+@mcp.tool()
+async def export_data(
+    project_path: Optional[str] = None,
+    include_vectors: bool = False
+) -> Dict[str, Any]:
+    """
+    Export all memories and rules as JSON.
+
+    Use for backup, migration, or sharing project knowledge.
+
+    Args:
+        project_path: Project root path
+        include_vectors: Include vector embeddings (large, default False)
+
+    Returns:
+        JSON structure with all memories and rules
+    """
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
+    ctx = await get_project_context(project_path)
+
+    async with ctx.db_manager.get_session() as session:
+        # Export memories
+        result = await session.execute(select(Memory))
+        memories = [
+            {
+                "id": m.id,
+                "category": m.category,
+                "content": m.content,
+                "rationale": m.rationale,
+                "context": m.context,
+                "tags": m.tags,
+                "file_path": m.file_path,
+                "keywords": m.keywords,
+                "is_permanent": m.is_permanent,
+                "outcome": m.outcome,
+                "worked": m.worked,
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+                "updated_at": m.updated_at.isoformat() if m.updated_at else None,
+                # Optionally include vectors (base64 encoded)
+                "vector_embedding": (
+                    base64.b64encode(m.vector_embedding).decode()
+                    if include_vectors and m.vector_embedding else None
+                )
+            }
+            for m in result.scalars().all()
+        ]
+
+        # Export rules
+        result = await session.execute(select(Rule))
+        rules = [
+            {
+                "id": r.id,
+                "trigger": r.trigger,
+                "trigger_keywords": r.trigger_keywords,
+                "must_do": r.must_do,
+                "must_not": r.must_not,
+                "ask_first": r.ask_first,
+                "warnings": r.warnings,
+                "priority": r.priority,
+                "enabled": r.enabled,
+                "created_at": r.created_at.isoformat() if r.created_at else None
+            }
+            for r in result.scalars().all()
+        ]
+
+    return {
+        "version": __version__,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "project_path": ctx.project_path,
+        "memories": memories,
+        "rules": rules
+    }
+
+
+@mcp.tool()
+async def import_data(
+    data: Dict[str, Any],
+    project_path: Optional[str] = None,
+    merge: bool = True
+) -> Dict[str, Any]:
+    """
+    Import memories and rules from exported JSON.
+
+    Args:
+        data: Exported data structure (from export_data)
+        project_path: Project root path
+        merge: If True, add to existing data. If False, replace all.
+
+    Returns:
+        Import statistics
+    """
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
+    if "memories" not in data or "rules" not in data:
+        return {"error": "Invalid data format. Expected 'memories' and 'rules' keys."}
+
+    ctx = await get_project_context(project_path)
+
+    memories_imported = 0
+    rules_imported = 0
+
+    async with ctx.db_manager.get_session() as session:
+        # Import memories
+        for mem_data in data.get("memories", []):
+            # Decode vector if present
+            vector_bytes = None
+            if mem_data.get("vector_embedding"):
+                try:
+                    vector_bytes = base64.b64decode(mem_data["vector_embedding"])
+                except Exception:
+                    pass
+
+            memory = Memory(
+                category=mem_data["category"],
+                content=mem_data["content"],
+                rationale=mem_data.get("rationale"),
+                context=mem_data.get("context", {}),
+                tags=mem_data.get("tags", []),
+                file_path=mem_data.get("file_path"),
+                keywords=mem_data.get("keywords"),
+                is_permanent=mem_data.get("is_permanent", False),
+                outcome=mem_data.get("outcome"),
+                worked=mem_data.get("worked"),
+                vector_embedding=vector_bytes
+            )
+            session.add(memory)
+            memories_imported += 1
+
+        # Import rules
+        for rule_data in data.get("rules", []):
+            rule = Rule(
+                trigger=rule_data["trigger"],
+                trigger_keywords=rule_data.get("trigger_keywords"),
+                must_do=rule_data.get("must_do", []),
+                must_not=rule_data.get("must_not", []),
+                ask_first=rule_data.get("ask_first", []),
+                warnings=rule_data.get("warnings", []),
+                priority=rule_data.get("priority", 0),
+                enabled=rule_data.get("enabled", True)
+            )
+            session.add(rule)
+            rules_imported += 1
+
+    # Rebuild indexes
+    await ctx.memory_manager.rebuild_index()
+    await ctx.rules_engine.rebuild_index()
+
+    return {
+        "status": "imported",
+        "memories_imported": memories_imported,
+        "rules_imported": rules_imported,
+        "message": f"Imported {memories_imported} memories and {rules_imported} rules"
     }
 
 

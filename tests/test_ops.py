@@ -38,3 +38,91 @@ class TestHealthTool:
                 await _project_contexts[temp_dir].db_manager.close()
                 del _project_contexts[temp_dir]
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+class TestExportImport:
+    """Test data export and import."""
+
+    @pytest.mark.asyncio
+    async def test_export_returns_json_structure(self):
+        """Verify export returns proper JSON structure."""
+        import tempfile
+        import shutil
+        from daem0nmcp.database import DatabaseManager
+        from daem0nmcp.memory import MemoryManager
+        from daem0nmcp.rules import RulesEngine
+        from daem0nmcp.server import export_data, get_project_context, _project_contexts
+
+        temp_dir = tempfile.mkdtemp()
+        try:
+            _project_contexts.clear()
+
+            ctx = await get_project_context(temp_dir)
+            await ctx.memory_manager.remember(
+                category="decision",
+                content="Test export"
+            )
+            await ctx.rules_engine.add_rule(
+                trigger="test trigger",
+                must_do=["test action"]
+            )
+
+            result = await export_data(project_path=temp_dir)
+
+            assert "memories" in result
+            assert "rules" in result
+            assert "version" in result
+            assert len(result["memories"]) >= 1
+            assert len(result["rules"]) >= 1
+        finally:
+            # Close the database connection before cleanup
+            if temp_dir in _project_contexts:
+                await _project_contexts[temp_dir].db_manager.close()
+                del _project_contexts[temp_dir]
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    @pytest.mark.asyncio
+    async def test_import_restores_data(self):
+        """Verify import restores exported data."""
+        import tempfile
+        import shutil
+        from daem0nmcp.server import export_data, import_data, get_project_context, _project_contexts
+
+        temp_dir1 = tempfile.mkdtemp()
+        temp_dir2 = tempfile.mkdtemp()
+        try:
+            _project_contexts.clear()
+
+            # Create data in first project
+            ctx1 = await get_project_context(temp_dir1)
+            await ctx1.memory_manager.remember(
+                category="decision",
+                content="Imported memory test"
+            )
+
+            # Export
+            exported = await export_data(project_path=temp_dir1)
+
+            # Import to second project
+            _project_contexts.clear()
+            result = await import_data(
+                data=exported,
+                project_path=temp_dir2
+            )
+
+            assert result["memories_imported"] >= 1
+
+            # Verify data exists
+            ctx2 = await get_project_context(temp_dir2)
+            recall_result = await ctx2.memory_manager.recall("Imported memory")
+            assert recall_result["found"] >= 1
+        finally:
+            # Close the database connections before cleanup
+            if temp_dir1 in _project_contexts:
+                await _project_contexts[temp_dir1].db_manager.close()
+                del _project_contexts[temp_dir1]
+            if temp_dir2 in _project_contexts:
+                await _project_contexts[temp_dir2].db_manager.close()
+                del _project_contexts[temp_dir2]
+            shutil.rmtree(temp_dir1, ignore_errors=True)
+            shutil.rmtree(temp_dir2, ignore_errors=True)

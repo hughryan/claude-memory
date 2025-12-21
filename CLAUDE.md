@@ -32,7 +32,7 @@ pytest tests/ -v --asyncio-mode=auto
 
 ```
 daem0nmcp/
-├── server.py      # MCP server, 15 tools (FastMCP)
+├── server.py      # MCP server, 19 tools (FastMCP)
 ├── memory.py      # MemoryManager - semantic store/recall with decay
 ├── rules.py       # RulesEngine - TF-IDF matched decision trees
 ├── similarity.py  # TF-IDF index, cosine similarity, conflict detection
@@ -71,7 +71,7 @@ scripts/
 - **Failed decision boosting**: Failed outcomes are highlighted in recalls (1.5x boost)
 - **Git awareness**: Briefing shows changes since last memory
 
-## MCP Tools (17 total)
+## MCP Tools (19 total)
 
 Core:
 1. `remember` - Store a memory with conflict detection and file association
@@ -92,7 +92,9 @@ Utility:
 14. `ingest_doc` - Fetch and store external documentation as learnings
 15. `propose_refactor` - Generate refactor context from memory + todos
 16. `rebuild_index` - Force rebuild of TF-IDF index for rules
-17. `health` - Get server health, version, and statistics
+17. `export_data` - Export all memories and rules as JSON (for backup/migration)
+18. `import_data` - Import memories and rules from exported JSON
+19. `health` - Get server health, version, and statistics
 
 ## Adding New Tools
 
