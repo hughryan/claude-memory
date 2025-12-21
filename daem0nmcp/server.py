@@ -361,7 +361,8 @@ async def remember(
         rationale=rationale,
         context=context,
         tags=tags,
-        file_path=file_path
+        file_path=file_path,
+        project_path=ctx.project_path
     )
 
 
@@ -1068,7 +1069,7 @@ async def recall_for_file(
         return _missing_project_path_error()
 
     ctx = await get_project_context(project_path)
-    return await ctx.memory_manager.recall_for_file(file_path=file_path, limit=limit)
+    return await ctx.memory_manager.recall_for_file(file_path=file_path, limit=limit, project_path=ctx.project_path)
 
 
 # ============================================================================
@@ -1229,7 +1230,8 @@ async def scan_todos(
                     content=f"{todo['type']}: {todo['content']}",
                     rationale=f"Found in codebase at {todo['file']}:{todo['line']}",
                     tags=['tech_debt', 'auto_scanned', todo['type'].lower()],
-                    file_path=todo['file']
+                    file_path=todo['file'],
+                    project_path=ctx.project_path
                 )
                 new_memories.append(memory)
                 existing_todos.add(sig)  # Prevent duplicates in same scan
@@ -1457,7 +1459,8 @@ async def ingest_doc(
             content=chunk[:500] + "..." if len(chunk) > 500 else chunk,
             rationale=f"Ingested from {url} (chunk {i+1}/{len(chunks)})",
             tags=['docs', 'ingested', topic],
-            context={'source_url': url, 'chunk_index': i, 'total_chunks': len(chunks)}
+            context={'source_url': url, 'chunk_index': i, 'total_chunks': len(chunks)},
+            project_path=ctx.project_path
         )
         memories_created.append(memory)
 
@@ -1733,13 +1736,21 @@ async def import_data(
                 except Exception:
                     pass
 
+            # Normalize file_path if present and project_path is available
+            from .memory import _normalize_file_path
+            file_path_abs = mem_data.get("file_path")
+            file_path_rel = None
+            if file_path_abs and ctx.project_path:
+                file_path_abs, file_path_rel = _normalize_file_path(file_path_abs, ctx.project_path)
+
             memory = Memory(
                 category=mem_data["category"],
                 content=mem_data["content"],
                 rationale=mem_data.get("rationale"),
                 context=mem_data.get("context", {}),
                 tags=mem_data.get("tags", []),
-                file_path=mem_data.get("file_path"),
+                file_path=file_path_abs,
+                file_path_relative=file_path_rel,
                 keywords=mem_data.get("keywords"),
                 is_permanent=mem_data.get("is_permanent", False),
                 outcome=mem_data.get("outcome"),

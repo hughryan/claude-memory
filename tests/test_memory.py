@@ -407,3 +407,132 @@ class TestMemoryManager:
         assert any("sessions" in c for c in all_content)
         # Ensure the other memory is not included
         assert not any("responses" in c for c in all_content)
+
+
+class TestPathNormalization:
+    """Test file path normalization."""
+
+    def test_normalize_file_path_relative_to_absolute(self):
+        """Test converting relative path to absolute."""
+        from daem0nmcp.memory import _normalize_file_path
+        import os
+
+        project_path = r"C:\Users\test\project"
+        file_path = "src/main.py"
+
+        absolute, relative = _normalize_file_path(file_path, project_path)
+
+        # Should create absolute path
+        assert Path(absolute).is_absolute()
+        assert "src" in absolute
+        assert "main.py" in absolute
+
+        # Should create relative path
+        assert relative == "src\\main.py" or relative == "src/main.py"
+
+    def test_normalize_file_path_absolute_input(self):
+        """Test handling of already absolute path."""
+        from daem0nmcp.memory import _normalize_file_path
+
+        project_path = r"C:\Users\test\project"
+        file_path = r"C:\Users\test\project\src\main.py"
+
+        absolute, relative = _normalize_file_path(file_path, project_path)
+
+        # Should keep absolute path
+        assert Path(absolute).is_absolute()
+
+        # Should compute relative path
+        if absolute.lower().startswith(project_path.lower()):
+            # Path is inside project
+            assert "src" in relative
+            assert "main.py" in relative
+        else:
+            # Path is outside project - should fallback to filename
+            assert relative == "main.py"
+
+    def test_normalize_file_path_outside_project(self):
+        """Test handling of path outside project root."""
+        from daem0nmcp.memory import _normalize_file_path
+
+        project_path = r"C:\Users\test\project"
+        file_path = r"C:\Users\test\other\file.py"
+
+        absolute, relative = _normalize_file_path(file_path, project_path)
+
+        # Should keep absolute path
+        assert Path(absolute).is_absolute()
+
+        # Should fallback to just filename since it's outside project
+        assert relative == "file.py"
+
+    def test_normalize_file_path_empty(self):
+        """Test handling of empty path."""
+        from daem0nmcp.memory import _normalize_file_path
+
+        project_path = r"C:\Users\test\project"
+        absolute, relative = _normalize_file_path("", project_path)
+
+        assert absolute is None
+        assert relative is None
+
+    def test_normalize_file_path_none(self):
+        """Test handling of None path."""
+        from daem0nmcp.memory import _normalize_file_path
+
+        project_path = r"C:\Users\test\project"
+        absolute, relative = _normalize_file_path(None, project_path)
+
+        assert absolute is None
+        assert relative is None
+
+    @pytest.mark.asyncio
+    async def test_remember_with_file_path_normalization(self, memory_manager, temp_storage):
+        """Test that remember() stores both absolute and relative paths."""
+        project_path = temp_storage
+        file_path = "src/test.py"
+
+        result = await memory_manager.remember(
+            category="decision",
+            content="Test decision",
+            file_path=file_path,
+            project_path=project_path
+        )
+
+        # Check that the memory was created
+        assert "id" in result
+        memory_id = result["id"]
+
+        # Fetch the memory from database to verify paths were stored
+        from daem0nmcp.models import Memory
+        from sqlalchemy import select
+
+        async with memory_manager.db.get_session() as session:
+            result = await session.execute(
+                select(Memory).where(Memory.id == memory_id)
+            )
+            memory = result.scalar_one()
+
+            # Should have stored absolute path
+            assert memory.file_path is not None
+            assert Path(memory.file_path).is_absolute()
+
+            # Should have stored relative path
+            assert memory.file_path_relative is not None
+            assert "src" in memory.file_path_relative.lower()
+            assert "test.py" in memory.file_path_relative.lower()
+
+    @pytest.mark.asyncio
+    async def test_remember_without_project_path(self, memory_manager):
+        """Test that remember() works without project_path."""
+        file_path = r"C:\Users\test\file.py"
+
+        result = await memory_manager.remember(
+            category="decision",
+            content="Test decision",
+            file_path=file_path
+            # No project_path provided
+        )
+
+        # Should still work, just stores the original path
+        assert "id" in result

@@ -11,8 +11,10 @@ This module handles:
 
 import logging
 import os
-from typing import Optional, List, Dict, Any
+import sys
+from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime, timezone
+from pathlib import Path
 from sqlalchemy import select, or_, func, desc
 
 from .database import DatabaseManager
@@ -40,6 +42,46 @@ def extract_keywords(text: str, tags: Optional[List[str]] = None) -> str:
         for tag in tags:
             tokens.extend(tokenize(tag))
     return " ".join(sorted(set(tokens)))
+
+
+def _normalize_file_path(file_path: Optional[str], project_path: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Normalize a file path to both absolute and project-relative forms.
+
+    On Windows, also case-folds for consistent matching.
+
+    Args:
+        file_path: The file path to normalize (can be absolute or relative)
+        project_path: The project root path
+
+    Returns:
+        Tuple of (absolute_path, relative_path)
+        Returns (None, None) if file_path is empty
+    """
+    if not file_path:
+        return None, None
+
+    path = Path(file_path)
+
+    # Make absolute if not already
+    if not path.is_absolute():
+        path = Path(project_path) / path
+
+    absolute = str(path.resolve())
+
+    # Compute relative path from project root
+    try:
+        relative = str(path.resolve().relative_to(Path(project_path).resolve()))
+    except ValueError:
+        # Path is outside project root, fallback to just filename
+        relative = str(path.name)
+
+    # Case-fold on Windows for consistent matching
+    if sys.platform == 'win32':
+        absolute = absolute.lower()
+        relative = relative.lower()
+
+    return absolute, relative
 
 
 class MemoryManager:
@@ -115,7 +157,8 @@ class MemoryManager:
         rationale: Optional[str] = None,
         context: Optional[Dict[str, Any]] = None,
         tags: Optional[List[str]] = None,
-        file_path: Optional[str] = None
+        file_path: Optional[str] = None,
+        project_path: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Store a new memory with conflict detection.
@@ -127,6 +170,7 @@ class MemoryManager:
             context: Structured context (files, alternatives, etc.)
             tags: Tags for retrieval
             file_path: Optional file path to associate this memory with
+            project_path: Optional project root path for normalizing file paths
 
         Returns:
             The created memory as a dict, with any detected conflicts
@@ -153,6 +197,12 @@ class MemoryManager:
             text_for_embedding += " " + rationale
         vector_embedding = vectors.encode(text_for_embedding) if self._vectors_enabled else None
 
+        # Normalize file path if provided
+        file_path_abs = file_path
+        file_path_rel = None
+        if file_path and project_path:
+            file_path_abs, file_path_rel = _normalize_file_path(file_path, project_path)
+
         memory = Memory(
             category=category,
             content=content,
@@ -160,7 +210,8 @@ class MemoryManager:
             context=context or {},
             tags=tags or [],
             keywords=keywords.strip(),
-            file_path=file_path,
+            file_path=file_path_abs,
+            file_path_relative=file_path_rel,
             is_permanent=is_permanent,
             vector_embedding=vector_embedding
         )
@@ -591,7 +642,8 @@ class MemoryManager:
     async def recall_for_file(
         self,
         file_path: str,
-        limit: int = 10
+        limit: int = 10,
+        project_path: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Get all memories associated with a specific file.
@@ -602,18 +654,41 @@ class MemoryManager:
         Args:
             file_path: The file path to look up
             limit: Max memories to return
+            project_path: Optional project root path for normalizing file paths
 
         Returns:
             Dict with memories organized by category
         """
+        # Normalize the input path if project_path is provided
+        normalized_abs = None
+        normalized_rel = None
+        if project_path:
+            normalized_abs, normalized_rel = _normalize_file_path(file_path, project_path)
+
         async with self.db.get_session() as session:
-            # Get memories directly linked to this file
-            result = await session.execute(
-                select(Memory)
-                .where(Memory.file_path == file_path)
-                .order_by(desc(Memory.created_at))
-                .limit(limit)
-            )
+            # Query both file_path and file_path_relative columns
+            if normalized_abs or normalized_rel:
+                # Use normalized paths with OR condition
+                conditions = []
+                if normalized_abs:
+                    conditions.append(Memory.file_path == normalized_abs)
+                if normalized_rel:
+                    conditions.append(Memory.file_path_relative == normalized_rel)
+
+                result = await session.execute(
+                    select(Memory)
+                    .where(or_(*conditions))
+                    .order_by(desc(Memory.created_at))
+                    .limit(limit)
+                )
+            else:
+                # Fallback to original behavior if no project_path
+                result = await session.execute(
+                    select(Memory)
+                    .where(Memory.file_path == file_path)
+                    .order_by(desc(Memory.created_at))
+                    .limit(limit)
+                )
             direct_memories = result.scalars().all()
 
             # Also search for memories mentioning this file in content

@@ -66,6 +66,10 @@ MIGRATIONS: List[Tuple[int, str, List[str]]] = [
         "ALTER TABLE memories ADD COLUMN pinned BOOLEAN DEFAULT 0;",
         "ALTER TABLE memories ADD COLUMN archived BOOLEAN DEFAULT 0;"
     ]),
+    (4, "Add file_path_relative column to memories", [
+        "ALTER TABLE memories ADD COLUMN file_path_relative TEXT;",
+        "CREATE INDEX IF NOT EXISTS idx_memories_file_path_relative ON memories(file_path_relative);"
+    ]),
 ]
 
 

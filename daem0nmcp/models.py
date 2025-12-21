@@ -50,6 +50,9 @@ class Memory(Base):
     # File path association - link memory to specific files
     file_path = Column(String, nullable=True, index=True)
 
+    # Relative file path (for portability across machines)
+    file_path_relative = Column(String, nullable=True, index=True)
+
     # Extracted keywords for semantic-ish search (computed from content + tags)
     keywords = Column(Text, nullable=True, index=True)
 
