@@ -629,8 +629,9 @@ class TestPathNormalization:
         # Should keep absolute path
         assert Path(absolute).is_absolute()
 
-        # Should fallback to just filename since it's outside project
-        assert relative == "file.py"
+        # Should provide a stable relative path outside the project
+        assert relative.replace("\\", "/").startswith("..")
+        assert relative.replace("\\", "/").endswith("other/file.py")
 
     def test_normalize_file_path_empty(self):
         """Test handling of empty path."""

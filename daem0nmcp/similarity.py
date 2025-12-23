@@ -124,6 +124,10 @@ def tokenize(text: str) -> List[str]:
     # First, extract code symbols (preserves exact identifiers)
     symbols = extract_code_symbols(text)
 
+    # Normalize common language tokens
+    text = text.replace("C++", "cpp").replace("c++", "cpp")
+    text = text.replace("C#", "csharp").replace("c#", "csharp")
+
     # Handle camelCase -> separate words
     text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
 
@@ -131,15 +135,18 @@ def tokenize(text: str) -> List[str]:
     text = text.replace('_', ' ')
 
     # Extract words
-    words = re.findall(r'[a-zA-Z0-9]+', text.lower())
+    words = re.findall(r"[^\W_]+", text.lower(), flags=re.UNICODE)
 
     # Filter stop words and very short words (but keep technical acronyms like 'db', 'ui', 'api')
     tokens = []
+    max_len = 64
     for w in words:
         if w in STOP_WORDS:
             continue
         if len(w) < 2:
             continue
+        if len(w) > max_len:
+            w = w[:max_len]
         # Keep short technical terms
         if len(w) == 2 and w not in {'db', 'ui', 'id', 'io', 'os', 'ip', 'vm', 'ai', 'ml'}:
             continue
@@ -374,6 +381,9 @@ def detect_conflict(
     if not existing_memories:
         return []
 
+    def _has_negation(text: str) -> bool:
+        return bool(re.search(r"\b(no|not|never|avoid|dont|don't|cannot|can't|without)\b", text.lower()))
+
     # Build temporary index
     index = TFIDFIndex()
     for i, mem in enumerate(existing_memories):
@@ -413,6 +423,11 @@ def detect_conflict(
             elif similarity > 0.8:
                 conflict_info['conflict_type'] = 'potential_duplicate'
                 conflict_info['warning'] = "Very similar memory already exists - consider updating instead"
+
+            if conflict_info['conflict_type'] is None:
+                if _has_negation(new_content) != _has_negation(mem.get('content', '')):
+                    conflict_info['conflict_type'] = 'polarity_conflict'
+                    conflict_info['warning'] = "Potential contradiction detected (negation mismatch)"
 
             if conflict_info['conflict_type']:
                 conflicts.append(conflict_info)

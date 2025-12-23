@@ -72,10 +72,14 @@ def _normalize_file_path(file_path: Optional[str], project_path: str) -> Tuple[O
 
     # Compute relative path from project root
     try:
-        relative = resolved.relative_to(Path(project_path).resolve()).as_posix()
+        project_root = Path(project_path).resolve()
+        relative = resolved.relative_to(project_root).as_posix()
     except ValueError:
-        # Path is outside project root, fallback to just filename
-        relative = Path(path.name).as_posix()
+        # Path is outside project root, keep a stable path for matching
+        try:
+            relative = os.path.relpath(resolved, start=project_root).replace("\\", "/")
+        except ValueError:
+            relative = resolved.as_posix()
 
     # Case-fold on Windows for consistent matching
     if sys.platform == 'win32':
@@ -83,6 +87,11 @@ def _normalize_file_path(file_path: Optional[str], project_path: str) -> Tuple[O
         relative = relative.lower()
 
     return absolute, relative
+
+
+def _not_archived_condition():
+    """Treat NULL archived values as not archived for legacy rows."""
+    return or_(Memory.archived == False, Memory.archived.is_(None))  # noqa: E712
 
 
 class MemoryManager:
@@ -131,7 +140,9 @@ class MemoryManager:
 
         if not self._index_loaded:
             async with self.db.get_session() as session:
-                result = await session.execute(select(Memory))
+                result = await session.execute(
+                    select(Memory).where(_not_archived_condition())
+                )
                 memories = result.scalars().all()
 
                 for mem in memories:
@@ -263,6 +274,7 @@ class MemoryManager:
             # Get recent memories that might conflict
             result = await session.execute(
                 select(Memory)
+                .where(_not_archived_condition())
                 .order_by(desc(Memory.created_at))
                 .limit(100)  # Check against recent memories
             )
@@ -344,7 +356,10 @@ class MemoryManager:
 
         async with self.db.get_session() as session:
             # Build query with date filters at database level for performance
-            query = select(Memory).where(Memory.id.in_(memory_ids))
+            query = select(Memory).where(
+                Memory.id.in_(memory_ids),
+                _not_archived_condition()
+            )
 
             def _to_utc_naive(dt_value: datetime) -> datetime:
                 if dt_value.tzinfo:
@@ -621,6 +636,7 @@ class MemoryManager:
                 result = await session.execute(
                     select(Memory)
                     .where(
+                        _not_archived_condition(),
                         or_(
                             Memory.content.like(f"%{query}%"),
                             Memory.rationale.like(f"%{query}%")
@@ -649,7 +665,10 @@ class MemoryManager:
 
         async with self.db.get_session() as session:
             result = await session.execute(
-                select(Memory).where(Memory.id.in_(memory_ids))
+                select(Memory).where(
+                    Memory.id.in_(memory_ids),
+                    _not_archived_condition()
+                )
             )
             memories = {m.id: m for m in result.scalars().all()}
 
@@ -734,7 +753,10 @@ class MemoryManager:
 
                 result = await session.execute(
                     select(Memory)
-                    .where(or_(*conditions))
+                    .where(
+                        _not_archived_condition(),
+                        or_(*conditions)
+                    )
                     .order_by(desc(Memory.created_at))
                     .limit(limit)
                 )
@@ -742,7 +764,10 @@ class MemoryManager:
                 # Fallback to original behavior if no project_path
                 result = await session.execute(
                     select(Memory)
-                    .where(Memory.file_path == file_path)
+                    .where(
+                        _not_archived_condition(),
+                        Memory.file_path == file_path
+                    )
                     .order_by(desc(Memory.created_at))
                     .limit(limit)
                 )
@@ -754,6 +779,7 @@ class MemoryManager:
             result = await session.execute(
                 select(Memory)
                 .where(
+                    _not_archived_condition(),
                     or_(
                         Memory.content.like(f"%{filename}%"),
                         Memory.rationale.like(f"%{filename}%")
@@ -828,7 +854,9 @@ class MemoryManager:
 
         # Rebuild
         async with self.db.get_session() as session:
-            result = await session.execute(select(Memory))
+            result = await session.execute(
+                select(Memory).where(_not_archived_condition())
+            )
             memories = result.scalars().all()
 
             for mem in memories:
@@ -880,6 +908,7 @@ class MemoryManager:
                     FROM memories m
                     JOIN memories_fts ON m.id = memories_fts.rowid
                     WHERE memories_fts MATCH :query
+                    AND (m.archived = 0 OR m.archived IS NULL)
                 """
                 params = {"query": query}
 

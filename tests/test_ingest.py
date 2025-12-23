@@ -1,7 +1,35 @@
 """Tests for document ingestion hardening."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
+
+
+class AsyncContextManager:
+    def __init__(self, response):
+        self._response = response
+
+    async def __aenter__(self):
+        return self._response
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+class MockAsyncClient:
+    def __init__(self, response=None, stream_error=None):
+        self._response = response
+        self._stream_error = stream_error
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    def stream(self, method, url):
+        if self._stream_error:
+            raise self._stream_error
+        return AsyncContextManager(self._response)
 
 
 class TestIngestDocHardening:
@@ -35,24 +63,29 @@ class TestIngestDocHardening:
         from daem0nmcp.server import _fetch_and_extract, MAX_CONTENT_SIZE
 
         # Mock a response that's too large
-        with patch('httpx.Client') as mock_client:
-            mock_response = MagicMock()
-            mock_response.text = "x" * (MAX_CONTENT_SIZE + 1000)
-            mock_response.raise_for_status = MagicMock()
-            mock_response.headers.get = MagicMock(return_value=None)
-            mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.headers.get = MagicMock(return_value=None)
+        mock_response.encoding = "utf-8"
+        mock_response.extensions = {}
 
-            result = _fetch_and_extract("https://example.com/large")
+        async def _aiter_bytes():
+            yield b"x" * (MAX_CONTENT_SIZE + 1000)
 
-            # Should be truncated or return None
-            assert result is None or len(result) <= MAX_CONTENT_SIZE
+        mock_response.aiter_bytes = _aiter_bytes
+
+        with patch('httpx.AsyncClient', return_value=MockAsyncClient(mock_response)):
+            result = await _fetch_and_extract("https://example.com/large")
+
+        # Should be truncated or return None
+        assert result is None or len(result) <= MAX_CONTENT_SIZE
 
     @pytest.mark.asyncio
     async def test_enforces_chunk_limit(self):
         """Verify total chunks are limited."""
         from daem0nmcp.server import ingest_doc, MAX_CHUNKS
 
-        with patch('daem0nmcp.server._fetch_and_extract') as mock_fetch:
+        with patch('daem0nmcp.server._fetch_and_extract', new_callable=AsyncMock) as mock_fetch:
             # Return content that would create many chunks
             mock_fetch.return_value = "word " * 100000  # Lots of words
 
@@ -154,7 +187,8 @@ class TestIngestDocMocked:
         with tempfile.TemporaryDirectory() as temp_dir:
             _project_contexts.clear()
 
-            with patch('daem0nmcp.server._fetch_and_extract', return_value=mock_content):
+            with patch('daem0nmcp.server._fetch_and_extract', new_callable=AsyncMock) as mock_fetch:
+                mock_fetch.return_value = mock_content
                 result = await ingest_doc(
                     url="https://example.com/docs",
                     topic="api-docs",
@@ -182,7 +216,8 @@ class TestIngestDocMocked:
             _project_contexts.clear()
 
             # When _fetch_and_extract returns None, ingest_doc returns an error
-            with patch('daem0nmcp.server._fetch_and_extract', return_value=None):
+            with patch('daem0nmcp.server._fetch_and_extract', new_callable=AsyncMock) as mock_fetch:
+                mock_fetch.return_value = None
                 result = await ingest_doc(
                     url="https://slow.example.com/docs",
                     topic="slow-docs",
@@ -208,7 +243,8 @@ class TestIngestDocMocked:
             _project_contexts.clear()
 
             # When _fetch_and_extract returns None, ingest_doc returns an error
-            with patch('daem0nmcp.server._fetch_and_extract', return_value=None):
+            with patch('daem0nmcp.server._fetch_and_extract', new_callable=AsyncMock) as mock_fetch:
+                mock_fetch.return_value = None
                 result = await ingest_doc(
                     url="https://example.com/missing",
                     topic="missing",
@@ -227,19 +263,20 @@ class TestIngestDocMocked:
 class TestFetchAndExtract:
     """Test _fetch_and_extract HTTP handling directly."""
 
-    def test_fetch_handles_timeout(self):
+    @pytest.mark.asyncio
+    async def test_fetch_handles_timeout(self):
         """Verify _fetch_and_extract handles httpx.TimeoutException."""
         import httpx
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
         from daem0nmcp.server import _fetch_and_extract
 
-        with patch('httpx.Client') as mock_client:
-            mock_client.return_value.__enter__.return_value.get.side_effect = httpx.TimeoutException("timeout")
-            result = _fetch_and_extract("https://slow.example.com/docs")
+        with patch('httpx.AsyncClient', return_value=MockAsyncClient(stream_error=httpx.TimeoutException("timeout"))):
+            result = await _fetch_and_extract("https://slow.example.com/docs")
 
         assert result is None
 
-    def test_fetch_handles_http_error(self):
+    @pytest.mark.asyncio
+    async def test_fetch_handles_http_error(self):
         """Verify _fetch_and_extract handles HTTPStatusError."""
         import httpx
         from unittest.mock import patch, MagicMock
@@ -251,27 +288,41 @@ class TestFetchAndExtract:
             request=MagicMock(),
             response=MagicMock()
         )
+        mock_response.headers.get = MagicMock(return_value=None)
+        mock_response.encoding = "utf-8"
+        mock_response.extensions = {}
 
-        with patch('httpx.Client') as mock_client:
-            mock_client.return_value.__enter__.return_value.get.return_value = mock_response
-            result = _fetch_and_extract("https://example.com/missing")
+        async def _aiter_bytes():
+            if False:
+                yield b""
+
+        mock_response.aiter_bytes = _aiter_bytes
+
+        with patch('httpx.AsyncClient', return_value=MockAsyncClient(mock_response)):
+            result = await _fetch_and_extract("https://example.com/missing")
 
         assert result is None
 
-    def test_fetch_extracts_html_content(self):
+    @pytest.mark.asyncio
+    async def test_fetch_extracts_html_content(self):
         """Verify _fetch_and_extract properly extracts text from HTML."""
         from unittest.mock import patch, MagicMock
         from daem0nmcp.server import _fetch_and_extract
 
         mock_response = MagicMock()
-        mock_response.text = "<html><body><p>API documentation content</p></body></html>"
         # Mock headers.get() to return None for content-length
         mock_response.headers.get = MagicMock(return_value=None)
         mock_response.raise_for_status = MagicMock()
+        mock_response.encoding = "utf-8"
+        mock_response.extensions = {}
 
-        with patch('httpx.Client') as mock_client:
-            mock_client.return_value.__enter__.return_value.get.return_value = mock_response
-            result = _fetch_and_extract("https://example.com/docs")
+        async def _aiter_bytes():
+            yield b"<html><body><p>API documentation content</p></body></html>"
+
+        mock_response.aiter_bytes = _aiter_bytes
+
+        with patch('httpx.AsyncClient', return_value=MockAsyncClient(mock_response)):
+            result = await _fetch_and_extract("https://example.com/docs")
 
         assert result is not None
         assert "API documentation content" in result

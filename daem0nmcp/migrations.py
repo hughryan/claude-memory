@@ -70,6 +70,46 @@ MIGRATIONS: List[Tuple[int, str, List[str]]] = [
         "ALTER TABLE memories ADD COLUMN file_path_relative TEXT;",
         "CREATE INDEX IF NOT EXISTS idx_memories_file_path_relative ON memories(file_path_relative);"
     ]),
+    (5, "Track last_modified for index freshness", [
+        """
+        CREATE TABLE IF NOT EXISTS meta (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """,
+        "INSERT OR IGNORE INTO meta(key, value) VALUES('memories_last_modified', CURRENT_TIMESTAMP);",
+        "INSERT OR IGNORE INTO meta(key, value) VALUES('rules_last_modified', CURRENT_TIMESTAMP);",
+        """
+        CREATE TRIGGER IF NOT EXISTS memories_touch_ins AFTER INSERT ON memories BEGIN
+            UPDATE meta SET value = CURRENT_TIMESTAMP WHERE key = 'memories_last_modified';
+        END;
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS memories_touch_upd AFTER UPDATE ON memories BEGIN
+            UPDATE meta SET value = CURRENT_TIMESTAMP WHERE key = 'memories_last_modified';
+        END;
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS memories_touch_del AFTER DELETE ON memories BEGIN
+            UPDATE meta SET value = CURRENT_TIMESTAMP WHERE key = 'memories_last_modified';
+        END;
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS rules_touch_ins AFTER INSERT ON rules BEGIN
+            UPDATE meta SET value = CURRENT_TIMESTAMP WHERE key = 'rules_last_modified';
+        END;
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS rules_touch_upd AFTER UPDATE ON rules BEGIN
+            UPDATE meta SET value = CURRENT_TIMESTAMP WHERE key = 'rules_last_modified';
+        END;
+        """,
+        """
+        CREATE TRIGGER IF NOT EXISTS rules_touch_del AFTER DELETE ON rules BEGIN
+            UPDATE meta SET value = CURRENT_TIMESTAMP WHERE key = 'rules_last_modified';
+        END;
+        """
+    ]),
 ]
 
 
@@ -132,40 +172,45 @@ def run_migrations(db_path: str) -> Tuple[int, List[str]]:
 
             logger.info(f"Applying migration {version}: {description}")
 
-            for sql in statements:
-                sql = sql.strip()
-                if not sql:
-                    continue
-
-                # Handle ALTER TABLE ADD COLUMN - check if column exists first
-                if "ALTER TABLE" in sql and "ADD COLUMN" in sql:
-                    # Parse table and column names
-                    parts = sql.split()
-                    table_idx = parts.index("TABLE") + 1
-                    column_idx = parts.index("COLUMN") + 1
-                    table = parts[table_idx]
-                    column = parts[column_idx]
-
-                    if check_column_exists(conn, table, column):
-                        logger.info(f"  Column {column} already exists in {table}, skipping")
+            try:
+                conn.execute("BEGIN")
+                for sql in statements:
+                    sql = sql.strip()
+                    if not sql:
                         continue
 
-                try:
-                    conn.execute(sql)
-                except sqlite3.OperationalError as e:
-                    # Ignore "duplicate column" errors
-                    if "duplicate column" in str(e).lower():
-                        logger.info(f"  Column already exists, skipping")
-                        continue
-                    raise
+                    # Handle ALTER TABLE ADD COLUMN - check if column exists first
+                    if "ALTER TABLE" in sql and "ADD COLUMN" in sql:
+                        # Parse table and column names
+                        parts = sql.split()
+                        table_idx = parts.index("TABLE") + 1
+                        column_idx = parts.index("COLUMN") + 1
+                        table = parts[table_idx]
+                        column = parts[column_idx]
 
-            # Record migration
-            conn.execute(
-                "INSERT INTO schema_version (version) VALUES (?)",
-                (version,)
-            )
-            conn.commit()
-            applied.append(f"v{version}: {description}")
+                        if check_column_exists(conn, table, column):
+                            logger.info(f"  Column {column} already exists in {table}, skipping")
+                            continue
+
+                    try:
+                        conn.execute(sql)
+                    except sqlite3.OperationalError as e:
+                        # Ignore "duplicate column" errors
+                        if "duplicate column" in str(e).lower():
+                            logger.info(f"  Column already exists, skipping")
+                            continue
+                        raise
+
+                # Record migration
+                conn.execute(
+                    "INSERT INTO schema_version (version) VALUES (?)",
+                    (version,)
+                )
+                conn.commit()
+                applied.append(f"v{version}: {description}")
+            except Exception:
+                conn.rollback()
+                raise
 
     finally:
         conn.close()

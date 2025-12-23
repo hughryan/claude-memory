@@ -3,7 +3,7 @@ Database Manager - Simplified for the focused memory system.
 """
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import NullPool
 from sqlalchemy import event
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -44,7 +44,7 @@ class DatabaseManager:
                 connect_args={"check_same_thread": False},
                 # Use NullPool for SQLite to avoid connection issues across async contexts
                 # Each operation gets a fresh connection
-                poolclass=StaticPool,
+                poolclass=NullPool,
                 pool_pre_ping=True,
             )
 
@@ -143,8 +143,38 @@ class DatabaseManager:
         from datetime import timezone as tz
 
         async with self.get_session() as session:
-            from sqlalchemy import select, func
+            from sqlalchemy import select, func, text
             from .models import Memory, Rule
+
+            def _parse_meta_time(value: Optional[str]) -> Optional[datetime]:
+                if not value:
+                    return None
+                try:
+                    parsed = datetime.fromisoformat(value)
+                except ValueError:
+                    return None
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=tz.utc)
+                return parsed
+
+            meta_times = []
+            try:
+                meta_exists = await session.execute(
+                    text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='meta'")
+                )
+                if meta_exists.scalar():
+                    mem_meta = await session.execute(
+                        text("SELECT value FROM meta WHERE key='memories_last_modified'")
+                    )
+                    rule_meta = await session.execute(
+                        text("SELECT value FROM meta WHERE key='rules_last_modified'")
+                    )
+                    meta_times.extend([
+                        _parse_meta_time(mem_meta.scalar()),
+                        _parse_meta_time(rule_meta.scalar())
+                    ])
+            except Exception:
+                pass
 
             # Get max updated_at from memories
             mem_result = await session.execute(
@@ -160,7 +190,7 @@ class DatabaseManager:
 
             # Return the most recent, ensuring timezone awareness
             times = []
-            for t in [mem_time, rule_time]:
+            for t in meta_times + [mem_time, rule_time]:
                 if t is not None:
                     # SQLite returns naive datetimes, make them UTC-aware
                     if t.tzinfo is None:

@@ -42,7 +42,7 @@ async def check_file(filepath: str, db: DatabaseManager, memory: MemoryManager, 
     }
 
     # Get file-specific memories
-    file_memories = await memory.recall_for_file(filepath)
+    file_memories = await memory.recall_for_file(filepath, project_path=settings.project_root)
 
     # Check for warnings in file memories
     for cat in ['warnings', 'decisions', 'patterns', 'learnings']:

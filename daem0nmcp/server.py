@@ -52,7 +52,7 @@ import subprocess
 import asyncio
 import base64
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, Set, Tuple
 from datetime import datetime, timezone, timedelta
 
 try:
@@ -80,8 +80,8 @@ except ImportError:
     from daem0nmcp import __version__
     from daem0nmcp import vectors
     from daem0nmcp.logging_config import StructuredFormatter, with_request_id, request_id_var, set_release_callback
-from sqlalchemy import select, desc, delete
-from dataclasses import dataclass
+from sqlalchemy import select, desc, delete, or_
+from dataclasses import dataclass, field
 
 # Configure logging
 logging.basicConfig(
@@ -116,6 +116,7 @@ class ProjectContext:
     initialized: bool = False
     last_accessed: float = 0.0  # For LRU tracking
     active_requests: int = 0  # Prevent eviction while in use
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 # Cache of project contexts by normalized path
@@ -157,6 +158,18 @@ def _get_storage_for_project(project_path: str) -> str:
     return str(Path(project_path) / ".daem0nmcp" / "storage")
 
 
+def _resolve_within_project(project_root: str, target_path: Optional[str]) -> Tuple[Optional[Path], Optional[str]]:
+    """Resolve a path and ensure it stays within the project root."""
+    root = Path(project_root).resolve()
+    candidate = root if not target_path else (root / target_path)
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError:
+        return None, "Path must be within the project root"
+    return resolved, None
+
+
 async def _release_task_contexts(task: asyncio.Task) -> None:
     """Release context usage counts for a completed task."""
     async with _task_contexts_lock:
@@ -168,7 +181,8 @@ async def _release_task_contexts(task: asyncio.Task) -> None:
     for path, count in counts.items():
         ctx = _project_contexts.get(path)
         if ctx:
-            ctx.active_requests = max(0, ctx.active_requests - count)
+            async with ctx.lock:
+                ctx.active_requests = max(0, ctx.active_requests - count)
 
 
 def _schedule_task_release(task: asyncio.Task) -> None:
@@ -191,11 +205,13 @@ async def _track_task_context(ctx: ProjectContext) -> None:
     async with _task_contexts_lock:
         counts = _task_contexts.setdefault(task, {})
         counts[ctx.project_path] = counts.get(ctx.project_path, 0) + 1
-        ctx.active_requests += 1
 
         if not getattr(task, "_daem0n_ctx_tracked", False):
             setattr(task, "_daem0n_ctx_tracked", True)
             task.add_done_callback(_schedule_task_release)
+
+    async with ctx.lock:
+        ctx.active_requests += 1
 
 
 async def _release_current_task_contexts() -> None:
@@ -326,12 +342,15 @@ async def evict_stale_contexts() -> int:
 
     async with _contexts_lock:
         # First pass: TTL eviction
-        ttl_expired = [
-            path for path, ctx in _project_contexts.items()
-            if (now - ctx.last_accessed) > CONTEXT_TTL_SECONDS
-            and ctx.active_requests == 0
-            and not (_context_locks.get(path) and _context_locks[path].locked())
-        ]
+        ttl_expired = []
+        for path, ctx in _project_contexts.items():
+            if (now - ctx.last_accessed) <= CONTEXT_TTL_SECONDS:
+                continue
+            if _context_locks.get(path) and _context_locks[path].locked():
+                continue
+            async with ctx.lock:
+                if ctx.active_requests == 0:
+                    ttl_expired.append(path)
 
         for path in ttl_expired:
             ctx = _project_contexts.pop(path)
@@ -344,11 +363,13 @@ async def evict_stale_contexts() -> int:
 
         # Second pass: LRU eviction if still over limit
         while len(_project_contexts) > MAX_PROJECT_CONTEXTS:
-            candidates = {
-                path: ctx for path, ctx in _project_contexts.items()
-                if ctx.active_requests == 0
-                and not (_context_locks.get(path) and _context_locks[path].locked())
-            }
+            candidates = {}
+            for path, ctx in _project_contexts.items():
+                if _context_locks.get(path) and _context_locks[path].locked():
+                    continue
+                async with ctx.lock:
+                    if ctx.active_requests == 0:
+                        candidates[path] = ctx
 
             if not candidates:
                 break
@@ -1396,8 +1417,11 @@ async def scan_todos(
 
     # Use provided path, or fall back to project path
     scan_path = path or ctx.project_path
+    resolved_scan_path, error = _resolve_within_project(ctx.project_path, scan_path)
+    if error or resolved_scan_path is None:
+        return {"error": error or "Invalid scan path", "path": scan_path}
     found_todos = _scan_for_todos(
-        scan_path,
+        str(resolved_scan_path),
         max_files=settings.todo_max_files
     )
 
@@ -1465,10 +1489,37 @@ async def scan_todos(
 # ============================================================================
 # Helper: Web fetching for documentation ingestion
 # ============================================================================
-def _validate_url(url: str) -> Optional[str]:
+def _resolve_public_ips(hostname: str) -> Set[str]:
+    """Resolve a hostname and ensure all IPs are public/global."""
+    import ipaddress
+    import socket
+
+    try:
+        addr_infos = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+    except socket.gaierror:
+        raise ValueError("Host could not be resolved")
+
+    if not addr_infos:
+        raise ValueError("Host could not be resolved")
+
+    ips: Set[str] = set()
+    for _, _, _, _, sockaddr in addr_infos:
+        ip_str = sockaddr[0]
+        try:
+            ip_obj = ipaddress.ip_address(ip_str)
+        except ValueError as exc:
+            raise ValueError(f"Invalid IP address for host: {ip_str}") from exc
+        if not ip_obj.is_global:
+            raise ValueError(f"Non-public IP addresses are not allowed: {ip_obj}")
+        ips.add(str(ip_obj))
+
+    return ips
+
+
+def _validate_url(url: str) -> Tuple[Optional[str], Optional[Set[str]]]:
     """
     Validate URL for ingestion.
-    Returns error message if invalid, None if valid.
+    Returns (error_message, resolved_public_ips).
 
     Security checks:
     - Scheme validation (no file://, etc.)
@@ -1477,59 +1528,45 @@ def _validate_url(url: str) -> Optional[str]:
     """
     from urllib.parse import urlparse
     import ipaddress
-    import socket
 
     try:
         parsed = urlparse(url)
     except Exception:
-        return "Invalid URL format"
+        return "Invalid URL format", None
 
     if parsed.scheme.lower() not in ALLOWED_URL_SCHEMES:
-        return f"Invalid URL scheme '{parsed.scheme}'. Allowed: {ALLOWED_URL_SCHEMES}"
+        return f"Invalid URL scheme '{parsed.scheme}'. Allowed: {ALLOWED_URL_SCHEMES}", None
 
     if not parsed.netloc:
-        return "URL must have a host"
+        return "URL must have a host", None
 
     # Extract hostname from netloc (remove port)
     hostname = parsed.hostname
     if not hostname:
-        return "URL must have a valid hostname"
+        return "URL must have a valid hostname", None
 
     # Block localhost
     if hostname.lower() in ['localhost', 'localhost.localdomain', '127.0.0.1', '::1']:
-        return "Localhost URLs are not allowed"
+        return "Localhost URLs are not allowed", None
 
     # If hostname is an IP literal, validate directly
     try:
         ip_obj = ipaddress.ip_address(hostname)
         if not ip_obj.is_global:
-            return f"Non-public IP addresses are not allowed: {ip_obj}"
-        return None
+            return f"Non-public IP addresses are not allowed: {ip_obj}", None
+        return None, {str(ip_obj)}
     except ValueError:
         pass
 
-    # Resolve all addresses and ensure they are public/global
     try:
-        addr_infos = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
-    except socket.gaierror:
-        return "Host could not be resolved"
+        allowed_ips = _resolve_public_ips(hostname)
+    except ValueError as exc:
+        return str(exc), None
 
-    if not addr_infos:
-        return "Host could not be resolved"
-
-    for _, _, _, _, sockaddr in addr_infos:
-        ip_str = sockaddr[0]
-        try:
-            ip_obj = ipaddress.ip_address(ip_str)
-        except ValueError:
-            return f"Invalid IP address for host: {ip_str}"
-        if not ip_obj.is_global:
-            return f"Non-public IP addresses are not allowed: {ip_str}"
-
-    return None
+    return None, allowed_ips
 
 
-def _fetch_and_extract(url: str) -> Optional[str]:
+async def _fetch_and_extract(url: str, allowed_ips: Optional[Set[str]] = None) -> Optional[str]:
     """Fetch URL and extract text content with size limits."""
     try:
         import httpx
@@ -1537,35 +1574,71 @@ def _fetch_and_extract(url: str) -> Optional[str]:
     except ImportError:
         return None
 
+    response = None
     try:
-        with httpx.Client(timeout=float(INGEST_TIMEOUT), follow_redirects=False, trust_env=False) as client:
-            response = client.get(url)
-            response.raise_for_status()
+        limits = httpx.Limits(max_connections=1, max_keepalive_connections=0)
+        async with httpx.AsyncClient(
+            timeout=float(INGEST_TIMEOUT),
+            follow_redirects=False,
+            trust_env=False,
+            limits=limits,
+            headers={"Accept-Encoding": "identity"},
+        ) as client:
+            async with client.stream("GET", url) as response:
+                response.raise_for_status()
 
-            # Check content length header first
-            content_length = response.headers.get('content-length')
-            if content_length and int(content_length) > MAX_CONTENT_SIZE:
-                logger.warning(f"Content too large: {content_length} bytes")
-                return None
+                # Check content length header first
+                content_length = response.headers.get("content-length")
+                if content_length:
+                    try:
+                        if int(content_length) > MAX_CONTENT_SIZE:
+                            logger.warning(f"Content too large: {content_length} bytes")
+                            return None
+                    except ValueError:
+                        pass
 
-            # Truncate if response is too large
-            text = response.text
-            if len(text) > MAX_CONTENT_SIZE:
-                logger.warning(f"Truncating content from {len(text)} to {MAX_CONTENT_SIZE}")
-                text = text[:MAX_CONTENT_SIZE]
+                size = 0
+                chunks: List[bytes] = []
+                async for chunk in response.aiter_bytes():
+                    size += len(chunk)
+                    if size > MAX_CONTENT_SIZE:
+                        logger.warning(f"Content too large: {size} bytes")
+                        return None
+                    chunks.append(chunk)
 
-            soup = BeautifulSoup(text, 'html.parser')
+                stream = response.extensions.get("network_stream")
+                if allowed_ips and stream and hasattr(stream, "get_extra_info"):
+                    peer = stream.get_extra_info("peername")
+                    peer_ip = None
+                    if isinstance(peer, (tuple, list)) and peer:
+                        peer_ip = peer[0]
+                    elif peer:
+                        peer_ip = str(peer)
+                    if peer_ip:
+                        try:
+                            import ipaddress
+                            peer_ip = str(ipaddress.ip_address(peer_ip))
+                        except ValueError:
+                            peer_ip = None
+                    if peer_ip and peer_ip not in allowed_ips:
+                        logger.warning(f"Resolved IP mismatch for {url}: {peer_ip}")
+                        return None
 
-            # Remove script and style elements
-            for element in soup(['script', 'style', 'nav', 'footer', 'header']):
-                element.decompose()
+        encoding = response.encoding if response else "utf-8"
+        text = b"".join(chunks).decode(encoding or "utf-8", errors="replace")
 
-            # Get text
-            text = soup.get_text(separator='\n', strip=True)
+        soup = BeautifulSoup(text, "html.parser")
 
-            # Clean up whitespace
-            lines = [line.strip() for line in text.split('\n') if line.strip()]
-            return '\n'.join(lines)
+        # Remove script and style elements
+        for element in soup(["script", "style", "nav", "footer", "header"]):
+            element.decompose()
+
+        # Get text
+        text = soup.get_text(separator="\n", strip=True)
+
+        # Clean up whitespace
+        lines = [line.strip() for line in text.split("\n") if line.strip()]
+        return "\n".join(lines)
 
     except Exception as e:
         logger.error(f"Failed to fetch {url}: {e}")
@@ -1623,13 +1696,13 @@ async def ingest_doc(
         return {"error": "topic cannot be empty", "url": url}
 
     # Validate URL
-    url_error = _validate_url(url)
+    url_error, allowed_ips = _validate_url(url)
     if url_error:
         return {"error": url_error, "url": url}
 
     ctx = await get_project_context(project_path)
 
-    content = _fetch_and_extract(url)
+    content = await _fetch_and_extract(url, allowed_ips=allowed_ips)
 
     if content is None:
         return {
@@ -1741,9 +1814,10 @@ async def propose_refactor(
     result["memories"] = file_memories
 
     # Resolve file path relative to project directory
-    absolute_file_path = Path(ctx.project_path) / file_path
-    if not absolute_file_path.is_absolute():
-        absolute_file_path = absolute_file_path.resolve()
+    absolute_file_path, error = _resolve_within_project(ctx.project_path, file_path)
+    if error or absolute_file_path is None:
+        result["error"] = error or "Invalid file path"
+        return result
 
     # Scan for TODOs in this specific file
     if absolute_file_path.exists():
@@ -2112,7 +2186,7 @@ async def prune_memories(
             Memory.is_permanent == False,
             Memory.pinned == False,
             Memory.outcome == None,  # Don't prune memories with outcomes
-            Memory.archived == False
+            or_(Memory.archived == False, Memory.archived.is_(None))  # noqa: E712
         )
 
         result = await session.execute(query)
@@ -2134,12 +2208,15 @@ async def prune_memories(
         for memory in to_prune:
             await session.delete(memory)
 
-        return {
-            "pruned": len(to_prune),
-            "categories": categories,
-            "older_than_days": older_than_days,
-            "message": f"Pruned {len(to_prune)} old memories"
-        }
+    # Rebuild index to remove pruned documents
+    await ctx.memory_manager.rebuild_index()
+
+    return {
+        "pruned": len(to_prune),
+        "categories": categories,
+        "older_than_days": older_than_days,
+        "message": f"Pruned {len(to_prune)} old memories"
+    }
 
 
 @mcp.tool()
@@ -2303,11 +2380,14 @@ async def cleanup_memories(
                     await session.delete(dupe)
                     merged += 1
 
-        return {
-            "merged": merged,
-            "duplicate_groups": len(duplicates),
-            "message": f"Merged {merged} duplicate memories"
-        }
+    # Rebuild index to reflect merged/deleted documents
+    await ctx.memory_manager.rebuild_index()
+
+    return {
+        "merged": merged,
+        "duplicate_groups": len(duplicates),
+        "message": f"Merged {merged} duplicate memories"
+    }
 
 
 @mcp.tool()
