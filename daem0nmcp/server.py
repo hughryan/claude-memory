@@ -51,6 +51,7 @@ import atexit
 import subprocess
 import asyncio
 import base64
+import json
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, Set, Tuple
 from datetime import datetime, timezone, timedelta
@@ -734,6 +735,113 @@ BOOTSTRAP_EXCLUDED_DIRS = {
     '.eggs', 'eggs', '.tox', '.nox', '.mypy_cache', '.pytest_cache',
     '.ruff_cache', 'htmlcov', '.coverage', 'site-packages'
 }
+
+
+def _extract_project_identity(project_path: str) -> Optional[str]:
+    """
+    Extract project identity from manifest files.
+
+    Tries manifests in priority order:
+    1. package.json (Node.js)
+    2. pyproject.toml (Python)
+    3. Cargo.toml (Rust)
+    4. go.mod (Go)
+
+    Returns:
+        Formatted string with project name, description, and key dependencies,
+        or None if no manifest found.
+    """
+    root = Path(project_path)
+
+    # Try package.json first
+    package_json = root / "package.json"
+    if package_json.exists():
+        try:
+            data = json.loads(package_json.read_text(encoding='utf-8', errors='ignore'))
+            parts = []
+            if data.get('name'):
+                parts.append(f"Project: {data['name']}")
+            if data.get('description'):
+                parts.append(f"Description: {data['description']}")
+            if data.get('scripts'):
+                scripts = ', '.join(list(data['scripts'].keys())[:5])
+                parts.append(f"Scripts: {scripts}")
+            deps = list(data.get('dependencies', {}).keys())[:10]
+            dev_deps = list(data.get('devDependencies', {}).keys())[:5]
+            if deps:
+                parts.append(f"Dependencies: {', '.join(deps)}")
+            if dev_deps:
+                parts.append(f"Dev dependencies: {', '.join(dev_deps)}")
+            if parts:
+                return "Tech stack (from package.json):\n" + "\n".join(parts)
+        except Exception as e:
+            logger.debug(f"Failed to parse package.json: {e}")
+
+    # Try pyproject.toml
+    pyproject = root / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            content = pyproject.read_text(encoding='utf-8', errors='ignore')
+            # Simple parsing without external deps
+            parts = []
+            for line in content.split('\n'):
+                line = line.strip()
+                if line.startswith('name = '):
+                    parts.append(f"Project: {line.split('=', 1)[1].strip().strip('\"')}")
+                elif line.startswith('description = '):
+                    parts.append(f"Description: {line.split('=', 1)[1].strip().strip('\"')}")
+            # Extract dependencies list
+            if 'dependencies = [' in content:
+                start = content.find('dependencies = [')
+                end = content.find(']', start)
+                if end > start:
+                    deps_str = content[start:end+1]
+                    deps = [d.strip().strip('"').strip("'").split('[')[0].split('>')[0].split('<')[0].split('=')[0]
+                            for d in deps_str.split('[')[1].split(']')[0].split(',')
+                            if d.strip()]
+                    if deps:
+                        parts.append(f"Dependencies: {', '.join(deps[:10])}")
+            if parts:
+                return "Tech stack (from pyproject.toml):\n" + "\n".join(parts)
+        except Exception as e:
+            logger.debug(f"Failed to parse pyproject.toml: {e}")
+
+    # Try Cargo.toml
+    cargo = root / "Cargo.toml"
+    if cargo.exists():
+        try:
+            content = cargo.read_text(encoding='utf-8', errors='ignore')
+            parts = []
+            for line in content.split('\n'):
+                line = line.strip()
+                if line.startswith('name = '):
+                    parts.append(f"Project: {line.split('=', 1)[1].strip().strip('\"')}")
+                elif line.startswith('description = '):
+                    parts.append(f"Description: {line.split('=', 1)[1].strip().strip('\"')}")
+            if parts:
+                return "Tech stack (from Cargo.toml):\n" + "\n".join(parts)
+        except Exception as e:
+            logger.debug(f"Failed to parse Cargo.toml: {e}")
+
+    # Try go.mod
+    gomod = root / "go.mod"
+    if gomod.exists():
+        try:
+            content = gomod.read_text(encoding='utf-8', errors='ignore')
+            parts = []
+            for line in content.split('\n'):
+                line = line.strip()
+                if line.startswith('module '):
+                    parts.append(f"Module: {line.split(' ', 1)[1]}")
+                elif line.startswith('go '):
+                    parts.append(f"Go version: {line.split(' ', 1)[1]}")
+            if parts:
+                return "Tech stack (from go.mod):\n" + "\n".join(parts)
+        except Exception as e:
+            logger.debug(f"Failed to parse go.mod: {e}")
+
+    return None
+
 
 # ============================================================================
 # Helper: Git awareness
