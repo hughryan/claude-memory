@@ -346,3 +346,34 @@ class TestPreCommitCLI:
         )
         # Should pass (exit 0) with no files
         assert result.returncode == 0
+
+
+class TestStatusCLI:
+    """Test status CLI command."""
+
+    def test_status_command_exists(self):
+        """The status subcommand should exist."""
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [sys.executable, "-m", "daem0nmcp.cli", "status", "--help"],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 0
+
+    def test_status_json_output(self, tmp_path):
+        """status --json should return valid JSON."""
+        import subprocess
+        import sys
+        import json
+
+        result = subprocess.run(
+            [sys.executable, "-m", "daem0nmcp.cli",
+             "--project-path", str(tmp_path), "--json", "status"],
+            capture_output=True, text=True
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert "pending_decisions" in data
+        assert "total_memories" in data

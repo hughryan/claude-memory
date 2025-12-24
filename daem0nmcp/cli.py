@@ -24,6 +24,8 @@ import argparse
 import json
 from pathlib import Path
 
+from datetime import datetime
+
 from .config import settings
 from .database import DatabaseManager
 from .memory import MemoryManager
@@ -83,6 +85,49 @@ async def get_briefing(db: DatabaseManager, memory: MemoryManager) -> dict:
     """Get session briefing."""
     await db.init_db()
     return await memory.get_statistics()
+
+
+async def get_enforcement_status(db: DatabaseManager, memory: MemoryManager, project_path: str) -> dict:
+    """Get current enforcement status."""
+    from datetime import timezone
+    from sqlalchemy import select, func
+    from .models import Memory
+
+    await db.init_db()
+
+    pending = []
+    now = datetime.now(timezone.utc)
+
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(Memory).where(
+                Memory.category == "decision",
+                Memory.outcome.is_(None),
+                Memory.worked.is_(None),
+            )
+        )
+        for mem in result.scalars().all():
+            created = mem.created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            age = now - created
+
+            pending.append({
+                "id": mem.id,
+                "content": mem.content,
+                "age_hours": int(age.total_seconds() / 3600),
+                "created_at": mem.created_at.isoformat() if mem.created_at else None,
+            })
+
+        # Get total count
+        total_result = await session.execute(select(func.count(Memory.id)))
+        total = total_result.scalar() or 0
+
+    return {
+        "pending_decisions": pending,
+        "total_memories": total,
+        "blocking_count": sum(1 for p in pending if p["age_hours"] > 24),
+    }
 
 
 async def run_precommit(checker, staged_files: list, project_path: str, interactive: bool, json_output: bool) -> int:
@@ -209,6 +254,9 @@ def main():
     precommit_parser.add_argument("--staged-files", nargs="*", default=None,
                                   help="Staged files (auto-detected from git if not provided)")
 
+    # status command
+    subparsers.add_parser("status", help="Show enforcement status (pending decisions, warnings)")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -297,6 +345,32 @@ def main():
                 if count == 0:
                     print("Database is up to date.")
                 print("\nTo also backfill vectors, run: python -m daem0nmcp.cli migrate --backfill-vectors")
+
+    elif args.command == "status":
+        project_path = args.project_path or os.getcwd()
+        try:
+            result = asyncio.run(get_enforcement_status(db, memory, project_path))
+        except Exception as e:
+            if args.json:
+                print(json.dumps({"error": str(e), "pending_decisions": [], "total_memories": 0, "blocking_count": 0}))
+            else:
+                print(f"ERROR: Failed to get status: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        if args.json:
+            print(json.dumps(result, default=str))
+        else:
+            print(f"Pending decisions (no outcome): {len(result['pending_decisions'])}")
+            for mem in result['pending_decisions'][:10]:
+                age = mem.get('age_hours', 0)
+                status = "BLOCKING" if age > 24 else "recent"
+                print(f"  [{status}] #{mem['id']}: {mem['content'][:60]} ({age}h old)")
+
+            if len(result['pending_decisions']) > 10:
+                print(f"  ... and {len(result['pending_decisions']) - 10} more")
+
+            print(f"\nTotal memories: {result['total_memories']}")
+            print(f"Blocking decisions: {result['blocking_count']}")
 
     elif args.command == "pre-commit":
         import subprocess
