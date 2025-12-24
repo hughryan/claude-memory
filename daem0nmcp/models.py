@@ -177,3 +177,37 @@ class MemoryRelationship(Base):
     # ORM relationships for easy navigation
     source = orm_relationship("Memory", foreign_keys=[source_id], backref="outgoing_relationships")
     target = orm_relationship("Memory", foreign_keys=[target_id], backref="incoming_relationships")
+
+
+class SessionState(Base):
+    """
+    Tracks session state for enforcement.
+
+    Sessions are identified by project + time bucket.
+    Tracks what context checks were made and what decisions are pending outcomes.
+    """
+    __tablename__ = "session_state"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, nullable=False, unique=True, index=True)
+    project_path = Column(String, nullable=False)
+    briefed = Column(Boolean, default=False)
+    context_checks = Column(JSON, default=list)  # List of files/topics checked
+    pending_decisions = Column(JSON, default=list)  # List of memory IDs
+    last_activity = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class EnforcementBypassLog(Base):
+    """
+    Audit log for when enforcement is bypassed via --no-verify.
+
+    Provides accountability even when developers skip enforcement.
+    """
+    __tablename__ = "enforcement_bypass_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    pending_decisions = Column(JSON, default=list)  # List of skipped decision IDs
+    staged_files_with_warnings = Column(JSON, default=list)  # List of risky files
+    reason = Column(Text, nullable=True)  # Optional user-provided reason
