@@ -796,9 +796,10 @@ def _extract_project_identity(project_path: str) -> Optional[str]:
                 end = content.find(']', start)
                 if end > start:
                     deps_str = content[start:end+1]
-                    deps = [d.strip().strip('"').strip("'").split('[')[0].split('>')[0].split('<')[0].split('=')[0]
+                    deps = [d.strip().strip('"').strip("'").split('[')[0].split('>')[0].split('<')[0].split('=')[0].strip()
                             for d in deps_str.split('[')[1].split(']')[0].split(',')
                             if d.strip()]
+                    deps = [d for d in deps if d]  # Remove empty strings
                     if deps:
                         parts.append(f"Dependencies: {', '.join(deps[:10])}")
             if parts:
