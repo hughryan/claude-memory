@@ -13,22 +13,26 @@
 
 **AI Memory & Decision System** - Give AI agents persistent memory and consistent decision-making with *actual* semantic understanding.
 
-## What's New in v2.6.0
+## What's New in v2.7.0
 
-- **Enhanced Bootstrap**: First-run context collection now extracts 7 memory categories automatically:
-  - Project identity (from package.json, pyproject.toml, Cargo.toml, go.mod)
-  - Architecture overview (README + directory structure)
-  - Coding conventions (linter configs, CONTRIBUTING.md)
-  - Project instructions (CLAUDE.md, AGENTS.md)
-  - Git evolution (recent commit history)
-  - Known issues (TODO/FIXME/HACK scan)
-  - Entry points (main files, CLI commands)
-- **Smarter Session Start**: `get_briefing()` now reports exactly what was ingested
+- **Pre-Commit Enforcement**: Git hooks that actually block commits when memory discipline is broken
+  - Blocks commits with decisions >24h old that lack recorded outcomes
+  - Blocks commits modifying files with known failed approaches
+  - Warns on recent pending decisions and file warnings
+- **CLI Resolution Tools**: New commands to resolve blocking issues
+  - `status` - Show pending decisions and what's blocking
+  - `record-outcome` - Record outcomes directly from CLI
+  - `install-hooks` / `uninstall-hooks` - Manage git hooks
+- **Automatic Session Tracking**: `remember()` now auto-tracks decisions as pending
+
+### Previous Features (v2.6.0)
+
+- **Enhanced Bootstrap**: First-run context collection extracts 7 memory categories automatically
+- **Smarter Session Start**: `get_briefing()` reports exactly what was ingested
 
 ### Previous Features (v2.5.0)
 - **Windows HTTP Transport**: Full Windows support via streamable-http (bypasses stdio bugs)
 - **Ritual-Themed Installation**: `Summon_Daem0n.md` and `Banish_Daem0n.md` for fun
-- **15 MCP Tools**: Including `scan_todos`, `propose_refactor`, `ingest_doc`, `recall_for_file`
 - **Claude Code Hooks**: Auto-reminders to use memory tools
 - **Protocol Skill**: `daem0nmcp-protocol` skill for Superpowers users
 
@@ -121,7 +125,7 @@ Or use `start_daem0nmcp_server.bat`
 
 3. **Start Claude Code** (after server is running)
 
-## Core Tools (15 Total)
+## Core Tools (27 Total)
 
 ### Memory Tools
 
@@ -312,14 +316,18 @@ Environment variables (prefix: `DAEM0NMCP_`):
 
 ```
 daem0nmcp/
-├── server.py      # MCP server with 15 tools (FastMCP)
+├── server.py      # MCP server with 27 tools (FastMCP)
 ├── memory.py      # Memory storage & semantic retrieval
 ├── rules.py       # Rule engine with TF-IDF matching
 ├── similarity.py  # TF-IDF index, decay, conflict detection
 ├── vectors.py     # Vector embeddings (sentence-transformers)
 ├── database.py    # SQLite async database
-├── models.py      # 2 tables: memories, rules
+├── models.py      # 5 tables: memories, rules, memory_relationships,
+│                  #           session_state, enforcement_bypass_log
+├── enforcement.py # Pre-commit enforcement & session tracking
+├── hooks.py       # Git hook templates & installation
 ├── cli.py         # Command-line interface
+├── migrations.py  # Database schema migrations
 └── config.py      # Pydantic settings
 
 .claude/
@@ -334,11 +342,25 @@ start_server.py    # HTTP server launcher (Windows)
 
 ## CLI Commands
 
+```bash
+# Check a file against memories and rules
+python -m daem0nmcp.cli check <filepath>
+
+# Get session briefing/statistics
+python -m daem0nmcp.cli briefing
+
+# Scan for TODO/FIXME/HACK comments
+python -m daem0nmcp.cli scan-todos [--auto-remember] [--path PATH]
+
+# Run database migrations (usually automatic)
+python -m daem0nmcp.cli migrate [--backfill-vectors]
+```
+
 ### Enforcement Commands
 
 ```bash
 # Check staged files (used by pre-commit hook)
-python -m daem0nmcp.cli pre-commit
+python -m daem0nmcp.cli pre-commit [--interactive]
 
 # Show pending decisions and blocking issues
 python -m daem0nmcp.cli status
@@ -347,11 +369,13 @@ python -m daem0nmcp.cli status
 python -m daem0nmcp.cli record-outcome <id> "<outcome>" --worked|--failed
 
 # Install git hooks
-python -m daem0nmcp.cli install-hooks
+python -m daem0nmcp.cli install-hooks [--force]
 
 # Remove git hooks
 python -m daem0nmcp.cli uninstall-hooks
 ```
+
+All commands support `--json` for machine-readable output and `--project-path` to specify the project root.
 
 ## Upgrading
 
@@ -389,7 +413,7 @@ This enables automatic enforcement that blocks commits when decisions lack outco
 # Install in development mode
 pip install -e .
 
-# Run tests (183 tests)
+# Run tests (209 tests)
 pytest tests/ -v --asyncio-mode=auto
 
 # Run server directly
@@ -425,4 +449,4 @@ rm -rf .daem0nmcp/
                               ~ Daem0n
 ```
 
-*Daem0nMCP v2.6.0: Persistent memory with semantic understanding and enhanced bootstrap—AI agents now start with rich project context from day one.*
+*Daem0nMCP v2.7.0: Pre-commit enforcement that actually blocks commits when memory discipline is broken—AI agents can no longer skip the protocol.*
