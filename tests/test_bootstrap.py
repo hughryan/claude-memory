@@ -1,5 +1,6 @@
 """Tests for enhanced bootstrap functionality."""
 import json
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -305,3 +306,173 @@ class TestBootstrapProjectContext:
 
         assert result["bootstrapped"] is True
         assert "sources" in result
+
+
+class TestBootstrapIntegration:
+    """End-to-end integration tests for bootstrap."""
+
+    @pytest.mark.asyncio
+    async def test_full_bootstrap_flow(self, tmp_path):
+        """Test that all extractors work together on a realistic project."""
+        # Create realistic project structure
+
+        # 1. package.json with name, description, scripts, dependencies
+        package_json = {
+            "name": "test-web-app",
+            "version": "1.0.0",
+            "description": "A realistic test web application",
+            "scripts": {
+                "dev": "vite",
+                "build": "tsc && vite build",
+                "test": "jest"
+            },
+            "dependencies": {
+                "react": "^18.2.0",
+                "react-dom": "^18.2.0",
+                "axios": "^1.4.0"
+            },
+            "devDependencies": {
+                "typescript": "^5.0.0",
+                "vite": "^4.3.0",
+                "jest": "^29.5.0"
+            }
+        }
+        (tmp_path / "package.json").write_text(json.dumps(package_json, indent=2))
+
+        # 2. README.md with overview
+        readme_content = """# Test Web App
+
+A realistic web application for testing bootstrap functionality.
+
+## Features
+- React-based UI
+- TypeScript for type safety
+- Vite for fast development
+- Jest for testing
+
+## Architecture
+This project follows a standard React application structure with:
+- Component-based architecture
+- Centralized state management
+- API integration layer
+"""
+        (tmp_path / "README.md").write_text(readme_content)
+
+        # 3. src/index.ts as entry point
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        (src_dir / "index.ts").write_text("""// Application entry point
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+const root = ReactDOM.createRoot(document.getElementById('root')!);
+root.render(<App />);
+""")
+
+        # 4. .eslintrc.json for conventions
+        eslint_config = {
+            "extends": ["airbnb", "airbnb-typescript"],
+            "rules": {
+                "indent": ["error", 2],
+                "quotes": ["error", "single"],
+                "semi": ["error", "always"]
+            }
+        }
+        (tmp_path / ".eslintrc.json").write_text(json.dumps(eslint_config, indent=2))
+
+        # 5. CLAUDE.md for project instructions
+        claude_md = """# Project Instructions
+
+## Development Guidelines
+- Use TypeScript for all new code
+- Follow Airbnb style guide
+- Write tests for all new features
+- Keep components small and focused
+
+## Architecture Decisions
+- Use React 18 with hooks
+- Prefer functional components over class components
+- Use axios for API calls
+"""
+        (tmp_path / "CLAUDE.md").write_text(claude_md)
+
+        # 6. A file with TODO comment for known issues
+        (src_dir / "api.ts").write_text("""// API integration layer
+// TODO: Add retry logic for failed requests
+// FIXME: Handle network timeouts properly
+
+export async function fetchData(url: string) {
+    // Implementation here
+}
+""")
+
+        # 7. Additional directory structure
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "docs").mkdir()
+
+        # Initialize git repo with at least one commit
+        subprocess.run(["git", "init"], cwd=str(tmp_path), capture_output=True, check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=str(tmp_path), capture_output=True, check=True
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test User"],
+            cwd=str(tmp_path), capture_output=True, check=True
+        )
+        subprocess.run(["git", "add", "."], cwd=str(tmp_path), capture_output=True, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "Initial commit"],
+            cwd=str(tmp_path), capture_output=True, check=True
+        )
+
+        # Run all extractors directly and verify each returns expected content
+
+        # Test project_identity extractor
+        identity = _extract_project_identity(str(tmp_path))
+        assert identity is not None
+        assert "test-web-app" in identity
+        assert "A realistic test web application" in identity
+        assert "react" in identity.lower()
+        assert "typescript" in identity.lower()
+
+        # Test architecture extractor
+        architecture = _extract_architecture(str(tmp_path))
+        assert architecture is not None
+        assert "Test Web App" in architecture
+        assert "React-based UI" in architecture
+        assert "src" in architecture
+        assert "tests" in architecture
+        assert "docs" in architecture
+        # Should exclude node_modules and .git
+        assert "node_modules" not in architecture
+        assert ".git" not in architecture
+
+        # Test conventions extractor
+        conventions = _extract_conventions(str(tmp_path))
+        assert conventions is not None
+        assert "eslint" in conventions.lower()
+        # The extractor reports tool names, not config content
+        assert "code tools configured" in conventions.lower()
+
+        # Test project_instructions extractor
+        instructions = _extract_project_instructions(str(tmp_path))
+        assert instructions is not None
+        assert "CLAUDE.md" in instructions
+        assert "TypeScript" in instructions
+        assert "Airbnb style guide" in instructions
+
+        # Test entry_points extractor
+        entry_points = _extract_entry_points(str(tmp_path))
+        assert entry_points is not None
+        assert "index.ts" in entry_points
+        assert "entry point" in entry_points.lower() or "src" in entry_points
+
+        # Test known_issues extractor
+        known_issues = _scan_todos_for_bootstrap(str(tmp_path))
+        assert known_issues is not None
+        assert "TODO" in known_issues
+        assert "retry logic" in known_issues
+        assert "FIXME" in known_issues
+        assert "network timeouts" in known_issues
