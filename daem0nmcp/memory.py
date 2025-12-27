@@ -31,26 +31,26 @@ VALID_RELATIONSHIPS = frozenset({
 from .similarity import (
     TFIDFIndex,
     tokenize,
+    extract_keywords,
     calculate_memory_decay,
     detect_conflict,
     get_global_index,
-    STOP_WORDS
+    STOP_WORDS,
+    DEFAULT_DECAY_HALF_LIFE_DAYS,
+    MIN_DECAY_WEIGHT,
 )
+from .cache import get_recall_cache, make_cache_key
 from . import vectors
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# Constants for scoring and relevance calculations
+# =============================================================================
 
-def extract_keywords(text: str, tags: Optional[List[str]] = None) -> str:
-    """
-    Extract keywords from text for backward compatibility.
-    Uses the new tokenizer under the hood.
-    """
-    tokens = tokenize(text)
-    if tags:
-        for tag in tags:
-            tokens.extend(tokenize(tag))
-    return " ".join(sorted(set(tokens)))
+# Boost multipliers for memory relevance scoring
+FAILED_DECISION_BOOST = 1.5  # Failed decisions are valuable warnings
+WARNING_BOOST = 1.2  # Warnings get moderate boost
 
 
 def _normalize_file_path(file_path: Optional[str], project_path: str) -> Tuple[Optional[str], Optional[str]]:
@@ -271,6 +271,9 @@ class MemoryManager:
                 result["conflicts"] = conflicts
                 result["warning"] = f"Found {len(conflicts)} potential conflict(s) with existing memories"
 
+        # Clear recall cache since memories changed
+        get_recall_cache().clear()
+
         # Track in session state for enforcement
         if category == "decision" and project_path:
             try:
@@ -281,6 +284,170 @@ class MemoryManager:
                 logger.debug(f"Session tracking failed (non-fatal): {e}")
 
         return result
+
+    async def remember_batch(
+        self,
+        memories: List[Dict[str, Any]],
+        project_path: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Store multiple memories in a single transaction.
+
+        More efficient than calling remember() multiple times, especially for
+        bootstrapping or bulk imports. All memories are stored atomically.
+
+        Args:
+            memories: List of memory dicts, each with:
+                - category: One of 'decision', 'pattern', 'warning', 'learning'
+                - content: The actual content to remember
+                - rationale: (optional) Why this is important
+                - tags: (optional) List of tags
+                - file_path: (optional) Associated file path
+            project_path: Project root path for normalizing file paths
+
+        Returns:
+            Summary dict with created_count, error_count, ids, and any errors
+        """
+        valid_categories = {'decision', 'pattern', 'warning', 'learning'}
+
+        results = {
+            "created_count": 0,
+            "error_count": 0,
+            "ids": [],
+            "errors": []
+        }
+
+        if not memories:
+            return results
+
+        # Pre-validate all memories
+        validated_memories = []
+        for i, mem in enumerate(memories):
+            category = mem.get("category")
+            content = mem.get("content")
+
+            if not category or category not in valid_categories:
+                results["errors"].append({
+                    "index": i,
+                    "error": f"Invalid or missing category. Must be one of: {valid_categories}"
+                })
+                results["error_count"] += 1
+                continue
+
+            if not content or not content.strip():
+                results["errors"].append({
+                    "index": i,
+                    "error": "Content is required and cannot be empty"
+                })
+                results["error_count"] += 1
+                continue
+
+            validated_memories.append((i, mem))
+
+        if not validated_memories:
+            return results
+
+        # Ensure index is loaded before batch operation
+        index = await self._ensure_index()
+
+        async with self.db.get_session() as session:
+            created_ids = []
+
+            for i, mem in validated_memories:
+                category = mem["category"]
+                content = mem["content"]
+                rationale = mem.get("rationale")
+                tags = mem.get("tags") or []
+                file_path = mem.get("file_path")
+                context = mem.get("context") or {}
+
+                try:
+                    # Extract keywords
+                    keywords = extract_keywords(content, tags)
+                    if rationale:
+                        keywords = keywords + " " + extract_keywords(rationale)
+
+                    # Semantic memories are permanent
+                    is_permanent = category in {'pattern', 'warning'}
+
+                    # Compute vector embedding if available
+                    text_for_embedding = content
+                    if rationale:
+                        text_for_embedding += " " + rationale
+                    vector_embedding = vectors.encode(text_for_embedding) if self._vectors_enabled else None
+
+                    # Normalize file path if provided
+                    file_path_abs = file_path
+                    file_path_rel = None
+                    if file_path and project_path:
+                        file_path_abs, file_path_rel = _normalize_file_path(file_path, project_path)
+
+                    memory = Memory(
+                        category=category,
+                        content=content,
+                        rationale=rationale,
+                        context=context,
+                        tags=tags,
+                        keywords=keywords.strip(),
+                        file_path=file_path_abs,
+                        file_path_relative=file_path_rel,
+                        is_permanent=is_permanent,
+                        vector_embedding=vector_embedding
+                    )
+
+                    session.add(memory)
+                    await session.flush()  # Get ID without committing
+
+                    # Add to TF-IDF index
+                    text = content
+                    if rationale:
+                        text += " " + rationale
+                    index.add_document(memory.id, text, tags)
+
+                    # Add to vector index if available
+                    if self._vectors_enabled and vector_embedding and self._vector_index:
+                        self._vector_index.add_from_bytes(memory.id, vector_embedding)
+
+                    created_ids.append(memory.id)
+                    results["created_count"] += 1
+
+                except Exception as e:
+                    results["errors"].append({
+                        "index": i,
+                        "error": str(e)
+                    })
+                    results["error_count"] += 1
+
+            # Transaction commits here when exiting context manager
+            results["ids"] = created_ids
+
+        # Track decisions in session state for enforcement (after commit)
+        if project_path:
+            try:
+                from .enforcement import SessionManager
+                session_mgr = SessionManager(self.db)
+
+                decision_ids = [
+                    created_ids[j]
+                    for j, (i, mem) in enumerate(validated_memories)
+                    if j < len(created_ids) and mem.get("category") == "decision"
+                ]
+
+                for decision_id in decision_ids:
+                    await session_mgr.add_pending_decision(project_path, decision_id)
+            except Exception as e:
+                logger.debug(f"Session tracking failed (non-fatal): {e}")
+
+        # Clear recall cache since memories changed
+        if results['created_count'] > 0:
+            get_recall_cache().clear()
+
+        logger.info(
+            f"Batch stored {results['created_count']} memories "
+            f"({results['error_count']} errors)"
+        )
+
+        return results
 
     async def _check_conflicts(
         self,
@@ -372,6 +539,9 @@ class MemoryManager:
         3. Boosts failed decisions (they're important warnings)
         4. Organizes by category
 
+        Results are cached for 5 seconds to avoid repeated searches.
+        Cache hits still update recall_count for saliency tracking.
+
         Pagination behavior:
         - offset/limit apply to the raw scored results BEFORE category distribution
         - The actual number of returned results may vary due to per-category limits
@@ -394,6 +564,23 @@ class MemoryManager:
         Returns:
             Dict with categorized memories and relevance scores
         """
+        # Check cache first
+        cache = get_recall_cache()
+        cache_key = make_cache_key(
+            topic, categories, tags, file_path, offset, limit,
+            since.isoformat() if since else None,
+            until.isoformat() if until else None,
+            include_warnings, decay_half_life_days
+        )
+        found, cached_result = cache.get(cache_key)
+        if found:
+            logger.debug(f"recall cache hit for topic: {topic[:50]}...")
+            # Still update recall_count for saliency tracking (side effect)
+            recalled_ids = [m['id'] for cat in ['decisions', 'patterns', 'warnings', 'learnings']
+                           for m in cached_result.get(cat, [])]
+            await self._increment_recall_counts(recalled_ids)
+            return cached_result
+
         await self._check_index_freshness()
         index = await self._ensure_index()
 
@@ -497,11 +684,11 @@ class MemoryManager:
 
             # Boost failed decisions - they're valuable warnings
             if mem.worked is False:
-                final_score *= 1.5
+                final_score *= FAILED_DECISION_BOOST
 
             # Boost warnings
             if mem.category == 'warning':
-                final_score *= 1.2
+                final_score *= WARNING_BOOST
 
             scored_memories.append((mem, final_score, base_score, decay))
 
@@ -561,7 +748,7 @@ class MemoryManager:
         recalled_ids = [m['id'] for cat in by_category.values() for m in cat]
         await self._increment_recall_counts(recalled_ids)
 
-        return {
+        result = {
             'topic': topic,
             'found': total,
             'total_count': total_count,
@@ -571,6 +758,11 @@ class MemoryManager:
             'summary': " | ".join(summary_parts) if summary_parts else None,
             **by_category
         }
+
+        # Cache the result
+        cache.set(cache_key, result)
+
+        return result
 
     async def record_outcome(
         self,
@@ -636,6 +828,9 @@ class MemoryManager:
                 await session_mgr.remove_pending_decision(project_path, memory_id)
             except Exception as e:
                 logger.debug(f"Session tracking failed (non-fatal): {e}")
+
+            # Clear recall cache since memory outcome changed (affects scoring)
+            get_recall_cache().clear()
 
             return response
 
@@ -1538,67 +1733,126 @@ class MemoryManager:
 
         return "\n".join(lines)
 
+    # Maximum tags allowed in FTS search filter (prevent query explosion)
+    _FTS_MAX_TAGS = 20
+
+    def _build_fts_tag_filter(self, tags: List[str], params: Dict[str, Any]) -> str:
+        """
+        Build parameterized tag filter clause for FTS search.
+
+        Args:
+            tags: List of tags to filter by (max _FTS_MAX_TAGS)
+            params: Parameter dict to update with tag values
+
+        Returns:
+            SQL clause string with parameterized placeholders
+        """
+        # Limit tags to prevent query explosion
+        safe_tags = tags[:self._FTS_MAX_TAGS]
+
+        # Build placeholder names and populate params
+        placeholders = []
+        for i, tag in enumerate(safe_tags):
+            param_name = f"tag{i}"
+            placeholders.append(f":{param_name}")
+            params[param_name] = tag
+
+        placeholder_list = ", ".join(placeholders)
+        return f"""
+            AND EXISTS (
+                SELECT 1 FROM json_each(m.tags)
+                WHERE json_each.value IN ({placeholder_list})
+            )
+        """
+
     async def fts_search(
         self,
         query: str,
         tags: Optional[List[str]] = None,
         file_path: Optional[str] = None,
-        limit: int = 20
+        limit: int = 20,
+        highlight: bool = False,
+        highlight_start: str = "<b>",
+        highlight_end: str = "</b>",
+        excerpt_tokens: int = 32
     ) -> List[Dict[str, Any]]:
         """
-        Fast full-text search using SQLite FTS5.
+        Fast full-text search using SQLite FTS5 with optional highlighting.
 
         Falls back to LIKE search if FTS5 is not available.
 
         Args:
             query: Search query (supports FTS5 syntax)
-            tags: Optional tag filter
+            tags: Optional tag filter (max 20 tags)
             file_path: Optional file path filter
             limit: Maximum results
+            highlight: If True, include highlighted excerpts in results
+            highlight_start: Opening tag for matched terms (default: <b>)
+            highlight_end: Closing tag for matched terms (default: </b>)
+            excerpt_tokens: Max tokens in excerpt (default: 32)
 
         Returns:
-            List of matching memories with relevance info
+            List of matching memories with relevance info.
+            If highlight=True, includes 'excerpt' field with highlighted matches.
         """
+        # Input validation
+        if not query or not query.strip():
+            return []
+
+        limit = min(max(1, limit), 100)  # Clamp to reasonable range
+        excerpt_tokens = min(max(8, excerpt_tokens), 64)  # Reasonable excerpt size
+
         async with self.db.get_session() as session:
             try:
-                # Try FTS5 search
                 from sqlalchemy import text
 
-                sql = """
-                    SELECT m.*, bm25(memories_fts) as rank
-                    FROM memories m
-                    JOIN memories_fts ON m.id = memories_fts.rowid
-                    WHERE memories_fts MATCH :query
-                    AND (m.archived = 0 OR m.archived IS NULL)
-                """
-                params = {"query": query}
+                # Base FTS5 query with parameterized inputs
+                # The snippet function uses column index:
+                # - Column 0 = content (from FTS index)
+                # - Column 1 = rationale (if indexed)
+                if highlight:
+                    sql_parts = [
+                        f"""
+                        SELECT m.*,
+                               bm25(memories_fts) as rank,
+                               snippet(memories_fts, 0, '{highlight_start}', '{highlight_end}', '...', {excerpt_tokens}) as content_excerpt
+                        FROM memories m
+                        JOIN memories_fts ON m.id = memories_fts.rowid
+                        WHERE memories_fts MATCH :query
+                        AND (m.archived = 0 OR m.archived IS NULL)
+                        """
+                    ]
+                else:
+                    sql_parts = [
+                        """
+                        SELECT m.*, bm25(memories_fts) as rank
+                        FROM memories m
+                        JOIN memories_fts ON m.id = memories_fts.rowid
+                        WHERE memories_fts MATCH :query
+                        AND (m.archived = 0 OR m.archived IS NULL)
+                        """
+                    ]
+                params: Dict[str, Any] = {"query": query.strip()}
 
-                # Add tag filter
+                # Add tag filter using helper
                 if tags:
-                    # Use EXISTS with json_each to check if any tag in the filter list exists in the memory's tags
-                    tag_placeholders = ", ".join(f":tag{i}" for i in range(len(tags)))
-                    sql += f"""
-                    AND EXISTS (
-                        SELECT 1 FROM json_each(m.tags)
-                        WHERE json_each.value IN ({tag_placeholders})
-                    )
-                    """
-                    for i, tag in enumerate(tags):
-                        params[f"tag{i}"] = tag
+                    sql_parts.append(self._build_fts_tag_filter(tags, params))
 
                 # Add file path filter
                 if file_path:
-                    sql += " AND m.file_path = :file_path"
+                    sql_parts.append(" AND m.file_path = :file_path")
                     params["file_path"] = file_path
 
-                sql += " ORDER BY rank LIMIT :limit"
+                sql_parts.append(" ORDER BY rank LIMIT :limit")
                 params["limit"] = limit
 
+                sql = "".join(sql_parts)
                 result = await session.execute(text(sql), params)
                 rows = result.fetchall()
 
-                return [
-                    {
+                results = []
+                for row in rows:
+                    item = {
                         "id": row.id,
                         "category": row.category,
                         "content": row.content,
@@ -1608,8 +1862,11 @@ class MemoryManager:
                         "relevance": abs(row.rank),  # bm25 returns negative scores
                         "created_at": row.created_at if isinstance(row.created_at, str) else (row.created_at.isoformat() if row.created_at else None)
                     }
-                    for row in rows
-                ]
+                    if highlight and hasattr(row, 'content_excerpt'):
+                        item["excerpt"] = row.content_excerpt
+                    results.append(item)
+
+                return results
 
             except Exception as e:
                 # FTS5 not available, fall back to LIKE search

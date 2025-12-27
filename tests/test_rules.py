@@ -264,3 +264,116 @@ class TestRulesEngine:
         # (security, auth/authentication)
         total_matches = result1["matched_rules"] + result2["matched_rules"]
         assert total_matches >= 1 or True  # May not match, but feature exists
+
+
+class TestRulesCaching:
+    """Test rules caching behavior."""
+
+    @pytest.mark.asyncio
+    async def test_check_rules_cache_hit(self, rules_engine):
+        """Test that identical check_rules calls use cache."""
+        from daem0nmcp.cache import get_rules_cache
+
+        # Clear cache to start fresh
+        get_rules_cache().clear()
+
+        # Create a rule
+        await rules_engine.add_rule(
+            trigger="cache test rule check",
+            must_do=["verify caching works"],
+            priority=1
+        )
+
+        # First check_rules - should populate cache
+        result1 = await rules_engine.check_rules("cache test rule check")
+
+        # Check cache stats before second call
+        stats_before = get_rules_cache().stats
+
+        # Second check_rules with identical parameters - should hit cache
+        result2 = await rules_engine.check_rules("cache test rule check")
+
+        stats_after = get_rules_cache().stats
+
+        # Verify results are the same
+        assert result1["matched_rules"] == result2["matched_rules"]
+        assert result1["action"] == result2["action"]
+
+        # Verify cache hit happened
+        assert stats_after["hits"] > stats_before["hits"]
+
+    @pytest.mark.asyncio
+    async def test_check_rules_cache_invalidated_on_add(self, rules_engine):
+        """Test that cache is cleared when new rule is added."""
+        from daem0nmcp.cache import get_rules_cache
+
+        # Create initial rule
+        await rules_engine.add_rule(
+            trigger="initial rule for add test",
+            must_do=["do something"]
+        )
+
+        # Clear cache
+        get_rules_cache().clear()
+
+        # Check rules - populates cache
+        await rules_engine.check_rules("initial rule for add test")
+
+        assert len(get_rules_cache()) > 0  # Cache has entries
+
+        # Add new rule - should clear cache
+        await rules_engine.add_rule(
+            trigger="new rule for add test",
+            must_do=["do something else"]
+        )
+
+        # Cache should be empty now
+        assert len(get_rules_cache()) == 0
+
+    @pytest.mark.asyncio
+    async def test_check_rules_cache_invalidated_on_delete(self, rules_engine):
+        """Test that cache is cleared when rule is deleted."""
+        from daem0nmcp.cache import get_rules_cache
+
+        # Create rule
+        result = await rules_engine.add_rule(
+            trigger="rule for delete test",
+            must_do=["do something"]
+        )
+        rule_id = result["id"]
+
+        # Clear cache
+        get_rules_cache().clear()
+
+        # Check rules - populates cache
+        await rules_engine.check_rules("rule for delete test")
+
+        # Delete rule - should clear cache via _invalidate_index
+        await rules_engine.delete_rule(rule_id)
+
+        # Cache should be empty now
+        assert len(get_rules_cache()) == 0
+
+    @pytest.mark.asyncio
+    async def test_check_rules_cache_invalidated_on_update_enabled(self, rules_engine):
+        """Test that cache is cleared when rule enabled status changes."""
+        from daem0nmcp.cache import get_rules_cache
+
+        # Create rule
+        result = await rules_engine.add_rule(
+            trigger="rule for enable test",
+            must_do=["do something"]
+        )
+        rule_id = result["id"]
+
+        # Clear cache
+        get_rules_cache().clear()
+
+        # Check rules - populates cache
+        await rules_engine.check_rules("rule for enable test")
+
+        # Disable rule - should clear cache via _invalidate_index
+        await rules_engine.update_rule(rule_id, enabled=False)
+
+        # Cache should be empty now
+        assert len(get_rules_cache()) == 0

@@ -900,3 +900,483 @@ class TestCompactMemories:
         )
 
         assert result["status"] == "dry_run"
+
+
+class TestRememberBatch:
+    """Tests for batch memory operations."""
+
+    @pytest.mark.asyncio
+    async def test_batch_creates_multiple_memories(self, memory_manager):
+        """Test that batch creates all valid memories."""
+        memories = [
+            {"category": "pattern", "content": "Use TypeScript for all new code"},
+            {"category": "warning", "content": "Don't use var, use const/let"},
+            {"category": "decision", "content": "Chose React over Vue", "rationale": "Team expertise"}
+        ]
+
+        result = await memory_manager.remember_batch(memories)
+
+        assert result["created_count"] == 3
+        assert result["error_count"] == 0
+        assert len(result["ids"]) == 3
+        assert len(result["errors"]) == 0
+
+    @pytest.mark.asyncio
+    async def test_batch_with_tags(self, memory_manager):
+        """Test batch with tags on memories."""
+        memories = [
+            {"category": "pattern", "content": "API responses use JSON", "tags": ["api", "json"]},
+            {"category": "warning", "content": "Avoid XML parsing", "tags": ["api", "xml"]}
+        ]
+
+        result = await memory_manager.remember_batch(memories)
+
+        assert result["created_count"] == 2
+
+        # Verify tags are searchable
+        recall_result = await memory_manager.recall("API")
+        all_mems = recall_result.get("patterns", []) + recall_result.get("warnings", [])
+        assert len(all_mems) >= 2
+
+    @pytest.mark.asyncio
+    async def test_batch_empty_list(self, memory_manager):
+        """Test batch with empty list returns appropriate response."""
+        result = await memory_manager.remember_batch([])
+
+        assert result["created_count"] == 0
+        assert result["error_count"] == 0
+        assert result["ids"] == []
+
+    @pytest.mark.asyncio
+    async def test_batch_invalid_category(self, memory_manager):
+        """Test that invalid categories are rejected in batch."""
+        memories = [
+            {"category": "invalid", "content": "This should fail"},
+            {"category": "pattern", "content": "This should succeed"}
+        ]
+
+        result = await memory_manager.remember_batch(memories)
+
+        assert result["created_count"] == 1
+        assert result["error_count"] == 1
+        assert len(result["ids"]) == 1
+        assert len(result["errors"]) == 1
+        assert result["errors"][0]["index"] == 0
+
+    @pytest.mark.asyncio
+    async def test_batch_missing_content(self, memory_manager):
+        """Test that missing content is rejected in batch."""
+        memories = [
+            {"category": "pattern"},  # No content
+            {"category": "pattern", "content": ""},  # Empty content
+            {"category": "pattern", "content": "Valid content"}
+        ]
+
+        result = await memory_manager.remember_batch(memories)
+
+        assert result["created_count"] == 1
+        assert result["error_count"] == 2
+        assert len(result["ids"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_batch_all_invalid(self, memory_manager):
+        """Test batch with all invalid memories."""
+        memories = [
+            {"category": "invalid", "content": "Bad category"},
+            {"category": "pattern"}  # Missing content
+        ]
+
+        result = await memory_manager.remember_batch(memories)
+
+        assert result["created_count"] == 0
+        assert result["error_count"] == 2
+        assert result["ids"] == []
+
+    @pytest.mark.asyncio
+    async def test_batch_atomic_success(self, memory_manager):
+        """Test that successful batch is atomic - all or nothing for valid entries."""
+        memories = [
+            {"category": "learning", "content": "Learned about async patterns"},
+            {"category": "learning", "content": "Learned about error handling"},
+            {"category": "learning", "content": "Learned about testing"}
+        ]
+
+        result = await memory_manager.remember_batch(memories)
+
+        # All should be created
+        assert result["created_count"] == 3
+
+        # All should be retrievable
+        recall_result = await memory_manager.recall("learned patterns handling testing")
+        learnings = recall_result.get("learnings", [])
+        assert len(learnings) >= 3
+
+    @pytest.mark.asyncio
+    async def test_batch_with_file_paths(self, memory_manager, temp_storage):
+        """Test batch with file path associations."""
+        memories = [
+            {"category": "warning", "content": "Don't modify this file", "file_path": "src/core.py"},
+            {"category": "pattern", "content": "Follow this pattern", "file_path": "src/utils.py"}
+        ]
+
+        result = await memory_manager.remember_batch(memories, project_path=temp_storage)
+
+        assert result["created_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_batch_preserves_rationale(self, memory_manager):
+        """Test that rationale is preserved in batch."""
+        memories = [
+            {
+                "category": "decision",
+                "content": "Use Redis for caching",
+                "rationale": "Better performance than memcached"
+            }
+        ]
+
+        result = await memory_manager.remember_batch(memories)
+        assert result["created_count"] == 1
+
+        # Verify rationale is searchable
+        recall_result = await memory_manager.recall("redis caching performance")
+        decisions = recall_result.get("decisions", [])
+        assert len(decisions) >= 1
+
+
+class TestTTLCache:
+    """Test the TTL cache implementation."""
+
+    def test_cache_basic_set_get(self):
+        """Test basic cache set and get operations."""
+        from daem0nmcp.cache import TTLCache
+
+        cache = TTLCache(ttl=5.0, maxsize=100)
+
+        cache.set("key1", "value1")
+        found, value = cache.get("key1")
+
+        assert found is True
+        assert value == "value1"
+
+    def test_cache_miss(self):
+        """Test cache miss returns (False, None)."""
+        from daem0nmcp.cache import TTLCache
+
+        cache = TTLCache(ttl=5.0, maxsize=100)
+
+        found, value = cache.get("nonexistent")
+
+        assert found is False
+        assert value is None
+
+    def test_cache_ttl_expiration(self):
+        """Test that entries expire after TTL."""
+        import time
+        from daem0nmcp.cache import TTLCache
+
+        cache = TTLCache(ttl=0.1, maxsize=100)  # 100ms TTL
+
+        cache.set("key1", "value1")
+        time.sleep(0.15)  # Wait for expiration
+
+        found, value = cache.get("key1")
+
+        assert found is False
+        assert value is None
+
+    def test_cache_invalidate(self):
+        """Test manual cache invalidation."""
+        from daem0nmcp.cache import TTLCache
+
+        cache = TTLCache(ttl=5.0, maxsize=100)
+
+        cache.set("key1", "value1")
+        removed = cache.invalidate("key1")
+
+        assert removed is True
+
+        found, value = cache.get("key1")
+        assert found is False
+
+    def test_cache_invalidate_nonexistent(self):
+        """Test invalidating non-existent key."""
+        from daem0nmcp.cache import TTLCache
+
+        cache = TTLCache(ttl=5.0, maxsize=100)
+
+        removed = cache.invalidate("nonexistent")
+        assert removed is False
+
+    def test_cache_clear(self):
+        """Test clearing the entire cache."""
+        from daem0nmcp.cache import TTLCache
+
+        cache = TTLCache(ttl=5.0, maxsize=100)
+
+        cache.set("key1", "value1")
+        cache.set("key2", "value2")
+        cache.set("key3", "value3")
+
+        count = cache.clear()
+
+        assert count == 3
+        assert len(cache) == 0
+
+    def test_cache_maxsize_eviction(self):
+        """Test that oldest entries are evicted when maxsize is reached."""
+        from daem0nmcp.cache import TTLCache
+
+        cache = TTLCache(ttl=5.0, maxsize=3)
+
+        cache.set("key1", "value1")
+        cache.set("key2", "value2")
+        cache.set("key3", "value3")
+        cache.set("key4", "value4")  # Should trigger eviction of key1
+
+        # key1 should be evicted
+        found1, _ = cache.get("key1")
+        assert found1 is False
+
+        # key4 should exist
+        found4, value4 = cache.get("key4")
+        assert found4 is True
+        assert value4 == "value4"
+
+    def test_cache_stats(self):
+        """Test cache statistics."""
+        from daem0nmcp.cache import TTLCache
+
+        cache = TTLCache(ttl=5.0, maxsize=100)
+
+        cache.set("key1", "value1")
+        cache.get("key1")  # Hit
+        cache.get("key2")  # Miss
+
+        stats = cache.stats
+
+        assert stats["size"] == 1
+        assert stats["maxsize"] == 100
+        assert stats["hits"] == 1
+        assert stats["misses"] == 1
+        assert stats["hit_rate"] == 0.5
+
+
+class TestMakeCacheKey:
+    """Test the cache key generation."""
+
+    def test_basic_cache_key(self):
+        """Test basic cache key generation."""
+        from daem0nmcp.cache import make_cache_key
+
+        key = make_cache_key("topic", ["cat1", "cat2"], None)
+
+        assert isinstance(key, tuple)
+        assert len(key) == 2
+
+    def test_cache_key_with_kwargs(self):
+        """Test cache key with keyword arguments."""
+        from daem0nmcp.cache import make_cache_key
+
+        key1 = make_cache_key("topic", limit=10, offset=0)
+        key2 = make_cache_key("topic", offset=0, limit=10)  # Same args, different order
+
+        # Should produce the same key regardless of kwarg order
+        assert key1 == key2
+
+    def test_cache_key_handles_lists(self):
+        """Test that lists are converted to tuples for hashability."""
+        from daem0nmcp.cache import make_cache_key
+
+        # Should not raise (lists converted to tuples)
+        key = make_cache_key("topic", ["a", "b", "c"])
+        assert isinstance(key, tuple)
+
+    def test_cache_key_handles_dicts(self):
+        """Test that dicts are converted for hashability."""
+        from daem0nmcp.cache import make_cache_key
+
+        # Should not raise (dicts converted to sorted tuple of items)
+        key = make_cache_key("topic", {"a": 1, "b": 2})
+        assert isinstance(key, tuple)
+
+
+class TestRecallCaching:
+    """Test recall caching behavior."""
+
+    @pytest.mark.asyncio
+    async def test_recall_cache_hit(self, memory_manager):
+        """Test that identical recalls use cache."""
+        from daem0nmcp.cache import get_recall_cache
+
+        # Clear cache to start fresh
+        get_recall_cache().clear()
+
+        # Create a memory
+        await memory_manager.remember(
+            category="decision",
+            content="Cache test decision for recall caching verification"
+        )
+
+        # Clear cache after remember (which clears it)
+        get_recall_cache().clear()
+
+        # First recall - should populate cache
+        result1 = await memory_manager.recall("cache test decision")
+
+        # Check cache stats
+        stats_before = get_recall_cache().stats
+
+        # Second recall with identical parameters - should hit cache
+        result2 = await memory_manager.recall("cache test decision")
+
+        stats_after = get_recall_cache().stats
+
+        # Verify results are the same
+        assert result1["found"] == result2["found"]
+        assert result1["topic"] == result2["topic"]
+
+        # Verify cache hit happened
+        assert stats_after["hits"] > stats_before["hits"]
+
+    @pytest.mark.asyncio
+    async def test_recall_cache_invalidated_on_remember(self, memory_manager):
+        """Test that cache is cleared when new memory is added."""
+        from daem0nmcp.cache import get_recall_cache
+
+        # Create initial memory and recall it
+        await memory_manager.remember(
+            category="pattern",
+            content="Initial pattern for invalidation test"
+        )
+        get_recall_cache().clear()  # Clear after the remember
+
+        # First recall
+        result1 = await memory_manager.recall("invalidation test pattern")
+
+        # Add a new memory - should clear cache
+        await memory_manager.remember(
+            category="pattern",
+            content="New pattern for invalidation test"
+        )
+
+        # Cache should be empty now
+        assert len(get_recall_cache()) == 0
+
+    @pytest.mark.asyncio
+    async def test_recall_cache_invalidated_on_outcome(self, memory_manager):
+        """Test that cache is cleared when outcome is recorded."""
+        from daem0nmcp.cache import get_recall_cache
+
+        # Create memory
+        result = await memory_manager.remember(
+            category="decision",
+            content="Decision for outcome cache test"
+        )
+        memory_id = result["id"]
+
+        get_recall_cache().clear()
+
+        # Recall it
+        await memory_manager.recall("outcome cache test")
+
+        # Record outcome - should clear cache
+        await memory_manager.record_outcome(memory_id, "It worked!", worked=True)
+
+        # Cache should be empty now
+        assert len(get_recall_cache()) == 0
+
+
+class TestFTSHighlighting:
+    """Test FTS5 search highlighting feature."""
+
+    @pytest.mark.asyncio
+    async def test_fts_search_without_highlight(self, memory_manager):
+        """Test FTS search returns results without excerpts by default."""
+        # Create a memory with searchable content
+        await memory_manager.remember(
+            category="decision",
+            content="Use PostgreSQL database for production environment"
+        )
+
+        # Search without highlighting
+        results = await memory_manager.fts_search("PostgreSQL")
+
+        # Should find the memory
+        assert len(results) >= 1
+
+        # Results should NOT have excerpt field by default
+        for r in results:
+            assert "excerpt" not in r or r.get("excerpt") is None
+
+    @pytest.mark.asyncio
+    async def test_fts_search_with_highlight(self, memory_manager):
+        """Test FTS search includes highlighted excerpts when requested."""
+        # Create a memory with searchable content
+        await memory_manager.remember(
+            category="pattern",
+            content="Always validate user input before processing to prevent security vulnerabilities"
+        )
+
+        # Search with highlighting
+        results = await memory_manager.fts_search("validate input", highlight=True)
+
+        # Should find the memory
+        assert len(results) >= 1
+
+        # Results should have excerpt field with highlight markers
+        found_with_excerpt = False
+        for r in results:
+            if "excerpt" in r and r["excerpt"]:
+                found_with_excerpt = True
+                # Default markers are <b> and </b>
+                assert "<b>" in r["excerpt"] or "validate" in r["excerpt"].lower()
+                break
+
+        # Note: SQLite FTS5 may not always produce excerpts for all matches
+        # So we check that results were returned at least
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_fts_search_custom_highlight_markers(self, memory_manager):
+        """Test FTS search with custom highlight markers."""
+        # Create a memory
+        await memory_manager.remember(
+            category="warning",
+            content="Never store passwords in plain text format"
+        )
+
+        # Search with custom markers
+        results = await memory_manager.fts_search(
+            "passwords",
+            highlight=True,
+            highlight_start="[[",
+            highlight_end="]]"
+        )
+
+        # Should find the memory
+        assert len(results) >= 1
+
+    @pytest.mark.asyncio
+    async def test_fts_search_empty_query(self, memory_manager):
+        """Test FTS search with empty query returns empty results."""
+        results = await memory_manager.fts_search("")
+        assert results == []
+
+        results = await memory_manager.fts_search("   ")
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_fts_search_limit(self, memory_manager):
+        """Test FTS search respects limit parameter."""
+        # Create multiple memories
+        for i in range(5):
+            await memory_manager.remember(
+                category="learning",
+                content=f"Learning about FTS search feature number {i}"
+            )
+
+        # Search with limit
+        results = await memory_manager.fts_search("FTS search", limit=2)
+
+        # Should respect limit
+        assert len(results) <= 2

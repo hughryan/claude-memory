@@ -160,14 +160,31 @@ def _get_storage_for_project(project_path: str) -> str:
 
 
 def _resolve_within_project(project_root: str, target_path: Optional[str]) -> Tuple[Optional[Path], Optional[str]]:
-    """Resolve a path and ensure it stays within the project root."""
-    root = Path(project_root).resolve()
-    candidate = root if not target_path else (root / target_path)
-    resolved = candidate.resolve()
+    """
+    Resolve a path and ensure it stays within the project root.
+
+    Args:
+        project_root: The project root directory
+        target_path: Optional path relative to project root
+
+    Returns:
+        Tuple of (resolved_path, error_message). On success, error_message is None.
+        On failure, resolved_path is None and error_message describes the issue.
+    """
+    try:
+        root = Path(project_root).resolve()
+        candidate = root if not target_path else (root / target_path)
+        resolved = candidate.resolve()
+    except OSError as e:
+        # Handle invalid paths (too long, invalid characters, permission issues, etc.)
+        logger.warning(f"Path resolution failed for '{project_root}' / '{target_path}': {e}")
+        return None, f"Invalid path: {e}"
+
     try:
         resolved.relative_to(root)
     except ValueError:
         return None, "Path must be within the project root"
+
     return resolved, None
 
 
@@ -335,26 +352,42 @@ async def evict_stale_contexts() -> int:
     Evict stale project contexts based on LRU and TTL policies.
 
     Returns the number of contexts evicted.
+
+    Note: Uses a two-phase approach to avoid nested lock acquisition:
+    1. Collect candidates under contexts_lock (no nested locks)
+    2. Process each candidate individually with proper lock ordering
     """
     import time
 
     evicted = 0
     now = time.time()
 
+    # Phase 1: Collect TTL candidates (no nested locks)
+    ttl_candidates = []
     async with _contexts_lock:
-        # First pass: TTL eviction
-        ttl_expired = []
         for path, ctx in _project_contexts.items():
             if (now - ctx.last_accessed) <= CONTEXT_TTL_SECONDS:
                 continue
+            # Skip if path-level lock is held
             if _context_locks.get(path) and _context_locks[path].locked():
                 continue
-            async with ctx.lock:
-                if ctx.active_requests == 0:
-                    ttl_expired.append(path)
+            ttl_candidates.append(path)
 
-        for path in ttl_expired:
-            ctx = _project_contexts.pop(path)
+    # Phase 2: Process TTL candidates individually
+    for path in ttl_candidates:
+        async with _contexts_lock:
+            ctx = _project_contexts.get(path)
+            if ctx is None:
+                continue  # Already evicted by another task
+
+            # Now safely check active_requests under context's own lock
+            async with ctx.lock:
+                if ctx.active_requests > 0:
+                    continue  # Became active, skip
+
+                # Safe to evict
+                _project_contexts.pop(path, None)
+
             try:
                 await ctx.db_manager.close()
             except Exception as e:
@@ -362,25 +395,36 @@ async def evict_stale_contexts() -> int:
             evicted += 1
             logger.info(f"Evicted TTL-expired context: {path}")
 
-        # Second pass: LRU eviction if still over limit
-        while len(_project_contexts) > MAX_PROJECT_CONTEXTS:
-            candidates = {}
+    # Phase 3: LRU eviction if still over limit
+    while True:
+        async with _contexts_lock:
+            if len(_project_contexts) <= MAX_PROJECT_CONTEXTS:
+                break
+
+            # Find candidates (paths with unlocked context locks)
+            candidates = []
             for path, ctx in _project_contexts.items():
                 if _context_locks.get(path) and _context_locks[path].locked():
                     continue
-                async with ctx.lock:
-                    if ctx.active_requests == 0:
-                        candidates[path] = ctx
+                candidates.append((path, ctx.last_accessed))
 
             if not candidates:
                 break
 
-            # Find oldest idle context
-            oldest_path = min(
-                candidates.keys(),
-                key=lambda p: candidates[p].last_accessed
-            )
-            ctx = _project_contexts.pop(oldest_path)
+            # Find oldest
+            oldest_path = min(candidates, key=lambda x: x[1])[0]
+            ctx = _project_contexts.get(oldest_path)
+
+            if ctx is None:
+                continue
+
+            # Check if still idle under context lock
+            async with ctx.lock:
+                if ctx.active_requests > 0:
+                    continue
+
+                _project_contexts.pop(oldest_path, None)
+
             try:
                 await ctx.db_manager.close()
             except Exception as e:
@@ -388,7 +432,8 @@ async def evict_stale_contexts() -> int:
             evicted += 1
             logger.info(f"Evicted LRU context: {oldest_path}")
 
-        # Clean up orphaned locks
+    # Phase 4: Clean up orphaned locks
+    async with _contexts_lock:
         orphaned_locks = set(_context_locks.keys()) - set(_project_contexts.keys())
         for path in orphaned_locks:
             del _context_locks[path]
@@ -483,6 +528,67 @@ async def remember(
         file_path=file_path,
         project_path=ctx.project_path
     )
+
+
+# ============================================================================
+# Tool 1b: REMEMBER_BATCH - Store multiple memories efficiently
+# ============================================================================
+@mcp.tool()
+@with_request_id
+async def remember_batch(
+    memories: List[Dict[str, Any]],
+    project_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Store multiple memories in a single transaction.
+
+    More efficient than calling remember() multiple times, especially for
+    bootstrapping or bulk imports. All memories are stored atomically.
+
+    Args:
+        memories: List of memory dicts, each with:
+            - category: One of 'decision', 'pattern', 'warning', 'learning' (required)
+            - content: The actual content to remember (required)
+            - rationale: Why this is important (optional)
+            - tags: List of tags for retrieval (optional)
+            - file_path: Associated file path (optional)
+        project_path: Project root path (for multi-project HTTP server support)
+
+    Returns:
+        Summary with created_count, error_count, ids list, and any errors
+
+    Examples:
+        remember_batch([
+            {"category": "pattern", "content": "Use TypeScript for all new code"},
+            {"category": "warning", "content": "Don't use var, use const/let"},
+            {"category": "decision", "content": "Chose React over Vue", "rationale": "Team expertise"}
+        ])
+    """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
+    if not memories:
+        return {
+            "created_count": 0,
+            "error_count": 0,
+            "ids": [],
+            "errors": [],
+            "message": "No memories provided"
+        }
+
+    ctx = await get_project_context(project_path)
+    result = await ctx.memory_manager.remember_batch(
+        memories=memories,
+        project_path=ctx.project_path
+    )
+
+    result["message"] = (
+        f"Stored {result['created_count']} memories"
+        + (f" with {result['error_count']} error(s)" if result['error_count'] else "")
+    )
+
+    return result
 
 
 # ============================================================================
@@ -1358,61 +1464,24 @@ async def _bootstrap_project_context(ctx: ProjectContext) -> Dict[str, Any]:
 
 
 # ============================================================================
-# Tool 6: GET_BRIEFING - Smart session start summary
+# Helper functions for get_briefing (extracted for maintainability)
 # ============================================================================
-@mcp.tool()
-@with_request_id
-async def get_briefing(
-    project_path: Optional[str] = None,
-    focus_areas: Optional[List[str]] = None
-) -> Dict[str, Any]:
+
+async def _fetch_recent_context(ctx: ProjectContext) -> Dict[str, Any]:
     """
-    Get everything needed to start a session - call this FIRST.
-
-    Returns:
-    - Memory statistics and learning insights
-    - Recent decisions (what changed lately)
-    - Active warnings (what to watch out for)
-    - High-priority rules (what to always check)
-    - Failed approaches (what not to repeat)
-    - Git changes since last memory (what happened while you were away)
-
-    If you provide focus_areas, you'll also get relevant memories for those topics.
+    Fetch recent decisions, warnings, failed approaches, and top rules.
 
     Args:
-        project_path: Project root path (IMPORTANT for multi-project support - pass your current working directory)
-        focus_areas: Optional list of topics to pre-fetch memories for
+        ctx: Project context with database access
 
     Returns:
-        Complete session briefing with actionable context
-
-    Example:
-        get_briefing()  # Basic briefing
-        get_briefing(project_path="/path/to/project")  # Explicit project
-        get_briefing(focus_areas=["authentication", "API"])  # With pre-loaded context
+        Dict with recent_decisions, active_warnings, failed_approaches,
+        top_rules, and last_memory_date
     """
-    # Require project_path for multi-project support
-    if not project_path and not _default_project_path:
-        return _missing_project_path_error()
-
-    ctx = await get_project_context(project_path)
-
-    # Get statistics with learning insights
-    stats = await ctx.memory_manager.get_statistics()
-
-    # AUTO-BOOTSTRAP: First run detection
-    # If no memories exist, bootstrap with CLAUDE.md and git history
-    bootstrap_result = None
-    if stats.get('total_memories', 0) == 0:
-        bootstrap_result = await _bootstrap_project_context(ctx)
-        # Re-fetch stats after bootstrap
-        stats = await ctx.memory_manager.get_statistics()
-
-    # Get most recent memory timestamp for git awareness
     last_memory_date = None
 
     async with ctx.db_manager.get_session() as session:
-        # Get most recent memory
+        # Get most recent memory timestamp
         result = await session.execute(
             select(Memory.created_at)
             .order_by(Memory.created_at.desc())
@@ -1485,26 +1554,69 @@ async def get_briefing(
             for r in result.scalars().all()
         ]
 
-    # Get git changes since last memory (run in project directory)
-    git_changes = _get_git_changes(last_memory_date, project_path=ctx.project_path)
+    return {
+        "last_memory_date": last_memory_date,
+        "recent_decisions": recent_decisions,
+        "active_warnings": active_warnings,
+        "failed_approaches": failed_approaches,
+        "top_rules": top_rules
+    }
 
-    # Pre-fetch memories for focus areas if specified
+
+async def _prefetch_focus_areas(
+    ctx: ProjectContext,
+    focus_areas: List[str]
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Pre-fetch memories for specified focus areas.
+
+    Args:
+        ctx: Project context with memory manager
+        focus_areas: List of topics to fetch (max 3 processed)
+
+    Returns:
+        Dict mapping area name to summary info
+    """
     focus_memories = {}
-    if focus_areas:
-        for area in focus_areas[:3]:  # Limit to 3 areas
-            memories = await ctx.memory_manager.recall(area, limit=5, project_path=ctx.project_path)
-            focus_memories[area] = {
-                "found": memories.get("found", 0),
-                "summary": memories.get("summary"),
-                "has_warnings": len(memories.get("warnings", [])) > 0,
-                "has_failed": any(
-                    m.get("worked") is False
-                    for cat in ["decisions", "patterns", "learnings"]
-                    for m in memories.get(cat, [])
-                )
-            }
 
-    # Build actionable message
+    for area in focus_areas[:3]:  # Limit to 3 areas
+        memories = await ctx.memory_manager.recall(
+            area, limit=5, project_path=ctx.project_path
+        )
+        focus_memories[area] = {
+            "found": memories.get("found", 0),
+            "summary": memories.get("summary"),
+            "has_warnings": len(memories.get("warnings", [])) > 0,
+            "has_failed": any(
+                m.get("worked") is False
+                for cat in ["decisions", "patterns", "learnings"]
+                for m in memories.get(cat, [])
+            )
+        }
+
+    return focus_memories
+
+
+def _build_briefing_message(
+    stats: Dict[str, Any],
+    bootstrap_result: Optional[Dict[str, Any]],
+    failed_approaches: List[Dict[str, Any]],
+    active_warnings: List[Dict[str, Any]],
+    git_changes: Optional[Dict[str, Any]]
+) -> str:
+    """
+    Build the actionable message for the briefing.
+
+    Args:
+        stats: Memory statistics
+        bootstrap_result: Bootstrap result if first run
+        failed_approaches: List of failed approaches
+        active_warnings: List of active warnings
+        git_changes: Git changes info
+
+    Returns:
+        Human-readable briefing message
+    """
     message_parts = [f"Daem0nMCP ready. {stats['total_memories']} memories stored."]
 
     # Add bootstrap notification if this was first run
@@ -1530,17 +1642,92 @@ async def get_briefing(
     if stats.get("learning_insights", {}).get("suggestion"):
         message_parts.append(stats["learning_insights"]["suggestion"])
 
+    return " ".join(message_parts)
+
+
+# ============================================================================
+# Tool 6: GET_BRIEFING - Smart session start summary
+# ============================================================================
+@mcp.tool()
+@with_request_id
+async def get_briefing(
+    project_path: Optional[str] = None,
+    focus_areas: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Get everything needed to start a session - call this FIRST.
+
+    Returns:
+    - Memory statistics and learning insights
+    - Recent decisions (what changed lately)
+    - Active warnings (what to watch out for)
+    - High-priority rules (what to always check)
+    - Failed approaches (what not to repeat)
+    - Git changes since last memory (what happened while you were away)
+
+    If you provide focus_areas, you'll also get relevant memories for those topics.
+
+    Args:
+        project_path: Project root path (IMPORTANT for multi-project support - pass your current working directory)
+        focus_areas: Optional list of topics to pre-fetch memories for
+
+    Returns:
+        Complete session briefing with actionable context
+
+    Example:
+        get_briefing()  # Basic briefing
+        get_briefing(project_path="/path/to/project")  # Explicit project
+        get_briefing(focus_areas=["authentication", "API"])  # With pre-loaded context
+    """
+    # Require project_path for multi-project support
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
+    ctx = await get_project_context(project_path)
+
+    # Get statistics with learning insights
+    stats = await ctx.memory_manager.get_statistics()
+
+    # AUTO-BOOTSTRAP: First run detection
+    bootstrap_result = None
+    if stats.get('total_memories', 0) == 0:
+        bootstrap_result = await _bootstrap_project_context(ctx)
+        stats = await ctx.memory_manager.get_statistics()
+
+    # Fetch recent context (decisions, warnings, failed approaches, rules)
+    recent_context = await _fetch_recent_context(ctx)
+
+    # Get git changes since last memory
+    git_changes = _get_git_changes(
+        recent_context["last_memory_date"],
+        project_path=ctx.project_path
+    )
+
+    # Pre-fetch memories for focus areas if specified
+    focus_memories = None
+    if focus_areas:
+        focus_memories = await _prefetch_focus_areas(ctx, focus_areas)
+
+    # Build actionable message
+    message = _build_briefing_message(
+        stats=stats,
+        bootstrap_result=bootstrap_result,
+        failed_approaches=recent_context["failed_approaches"],
+        active_warnings=recent_context["active_warnings"],
+        git_changes=git_changes
+    )
+
     return {
         "status": "ready",
         "statistics": stats,
-        "recent_decisions": recent_decisions,
-        "active_warnings": active_warnings,
-        "failed_approaches": failed_approaches,
-        "top_rules": top_rules,
+        "recent_decisions": recent_context["recent_decisions"],
+        "active_warnings": recent_context["active_warnings"],
+        "failed_approaches": recent_context["failed_approaches"],
+        "top_rules": recent_context["top_rules"],
         "git_changes": git_changes,
-        "focus_areas": focus_memories if focus_memories else None,
+        "focus_areas": focus_memories,
         "bootstrap": bootstrap_result,
-        "message": " ".join(message_parts)
+        "message": message
     }
 
 
@@ -1554,6 +1741,9 @@ async def search_memories(
     limit: int = 20,
     offset: int = 0,
     include_meta: bool = False,
+    highlight: bool = False,
+    highlight_start: str = "<b>",
+    highlight_end: str = "</b>",
     project_path: Optional[str] = None
 ) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
     """
@@ -1561,16 +1751,22 @@ async def search_memories(
 
     Use this when you need to find specific memories by content.
     Uses TF-IDF matching for better results than exact text search.
+    Optionally includes highlighted excerpts showing matched terms.
 
     Args:
         query: Search text
         limit: Maximum results (default: 20)
         offset: Number of results to skip (default: 0)
         include_meta: Return pagination metadata with results
+        highlight: If True, include highlighted excerpts in results
+        highlight_start: Opening tag for matched terms (default: <b>)
+        highlight_end: Closing tag for matched terms (default: </b>)
         project_path: Project root path (for multi-project HTTP server support)
 
     Returns:
-        Matching memories ranked by relevance
+        Matching memories ranked by relevance.
+        If highlight=True, each result includes an 'excerpt' field with
+        highlighted matches.
     """
     # Require project_path for multi-project support
     if not project_path and not _default_project_path:
@@ -1581,7 +1777,19 @@ async def search_memories(
 
     ctx = await get_project_context(project_path)
     raw_limit = offset + limit + 1
-    results = await ctx.memory_manager.search(query=query, limit=raw_limit)
+
+    if highlight:
+        # Use FTS search with highlighting
+        results = await ctx.memory_manager.fts_search(
+            query=query,
+            limit=raw_limit,
+            highlight=True,
+            highlight_start=highlight_start,
+            highlight_end=highlight_end
+        )
+    else:
+        results = await ctx.memory_manager.search(query=query, limit=raw_limit)
+
     has_more = len(results) > offset + limit
     paginated = results[offset:offset + limit]
 
@@ -1591,6 +1799,7 @@ async def search_memories(
             "offset": offset,
             "limit": limit,
             "has_more": has_more,
+            "highlight": highlight,
             "results": paginated
         }
 

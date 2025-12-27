@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     max_project_contexts: int = 10  # Maximum cached project contexts
     context_ttl_seconds: int = 3600  # 1 hour TTL for unused contexts
 
+    # Enforcement settings
+    pending_decision_threshold_hours: int = 24  # Hours before pending decisions block commits
+
     # Ingestion limits
     max_content_size: int = 1_000_000  # 1MB max content
     max_chunks: int = 50  # Maximum chunks per ingestion

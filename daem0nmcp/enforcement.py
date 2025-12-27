@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from .database import DatabaseManager
 from .models import SessionState, EnforcementBypassLog, Memory
+from .config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -159,12 +160,18 @@ class PreCommitChecker:
     Validates staged files before commit.
 
     Checks for:
-    - Pending decisions without outcomes (blocks if >24h old, warns if recent)
+    - Pending decisions without outcomes (blocks if >threshold hours old, warns if recent)
     - Files with failed approaches (worked=False)
     - Files with warning memories
+
+    The threshold is configurable via DAEM0NMCP_PENDING_DECISION_THRESHOLD_HOURS
+    environment variable (default: 24 hours).
     """
 
-    PENDING_THRESHOLD = timedelta(hours=24)
+    @property
+    def pending_threshold(self) -> timedelta:
+        """Get the configurable pending decision threshold."""
+        return timedelta(hours=settings.pending_decision_threshold_hours)
 
     def __init__(self, db_manager: DatabaseManager, memory_manager):
         """
@@ -212,7 +219,7 @@ class PreCommitChecker:
             if decision_time.tzinfo is None:
                 decision_time = decision_time.replace(tzinfo=timezone.utc)
             age = now - decision_time
-            if age > self.PENDING_THRESHOLD:
+            if age > self.pending_threshold:
                 age_hours = int(age.total_seconds() / 3600)
                 blocks.append({
                     "type": "PENDING_DECISION_OLD",

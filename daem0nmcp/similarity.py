@@ -17,6 +17,14 @@ from collections import Counter
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# Constants for decay and similarity calculations
+# =============================================================================
+
+# Memory decay defaults
+DEFAULT_DECAY_HALF_LIFE_DAYS = 30.0  # Days until memory relevance is halved
+MIN_DECAY_WEIGHT = 0.3  # Floor for decayed memory weight (never goes below this)
+
 # Extended stop words for better signal extraction
 STOP_WORDS = {
     'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
@@ -156,6 +164,27 @@ def tokenize(text: str) -> List[str]:
     tokens.extend([s.lower() for s in symbols])
 
     return tokens
+
+
+def extract_keywords(text: str, tags: Optional[List[str]] = None) -> str:
+    """
+    Extract searchable keywords from text and optional tags.
+
+    Uses the tokenizer under the hood for consistent text processing.
+    Returns a sorted, deduplicated string of keywords for storage/indexing.
+
+    Args:
+        text: The text to extract keywords from
+        tags: Optional list of tags to include (with boosted weight)
+
+    Returns:
+        Space-separated string of sorted unique keywords
+    """
+    tokens = tokenize(text)
+    if tags:
+        for tag in tags:
+            tokens.extend(tokenize(tag))
+    return " ".join(sorted(set(tokens)))
 
 
 class TFIDFIndex:
@@ -322,8 +351,8 @@ class TFIDFIndex:
 
 def calculate_memory_decay(
     created_at: datetime,
-    half_life_days: float = 30.0,
-    min_weight: float = 0.3
+    half_life_days: float = DEFAULT_DECAY_HALF_LIFE_DAYS,
+    min_weight: float = MIN_DECAY_WEIGHT
 ) -> float:
     """
     Calculate time-based decay for memory relevance.

@@ -15,15 +15,10 @@ from sqlalchemy import select, desc
 
 from .database import DatabaseManager
 from .models import Rule
-from .similarity import TFIDFIndex, tokenize
+from .similarity import TFIDFIndex, tokenize, extract_keywords
+from .cache import get_rules_cache, make_cache_key
 
 logger = logging.getLogger(__name__)
-
-
-def extract_keywords(text: str) -> str:
-    """Extract keywords from text for backward compatibility."""
-    tokens = tokenize(text)
-    return " ".join(sorted(set(tokens)))
 
 
 class RulesEngine:
@@ -86,10 +81,12 @@ class RulesEngine:
         return False
 
     def _invalidate_index(self) -> None:
-        """Invalidate the index when rules change."""
+        """Invalidate the index and cache when rules change."""
         self._index_loaded = False
         if self._index:
             self._index = None
+        # Also clear the rules cache since rules changed
+        get_rules_cache().clear()
 
     async def add_rule(
         self,
@@ -137,6 +134,9 @@ class RulesEngine:
             index = await self._ensure_index()
             index.add_document(rule_id, trigger)
 
+            # Clear cache since rules changed
+            get_rules_cache().clear()
+
             logger.info(f"Added rule: {trigger[:50]}...")
 
             return {
@@ -160,6 +160,7 @@ class RulesEngine:
         Check if an action triggers any rules and return guidance.
 
         Uses TF-IDF semantic matching for better rule activation.
+        Results are cached for 5 seconds to avoid repeated searches.
 
         Args:
             action: Description of what the AI is about to do
@@ -169,6 +170,14 @@ class RulesEngine:
         Returns:
             Matching rules with combined guidance
         """
+        # Check cache first (context is excluded from key as it's just metadata)
+        cache = get_rules_cache()
+        cache_key = make_cache_key(action, threshold)
+        found, cached_result = cache.get(cache_key)
+        if found:
+            logger.debug(f"check_rules cache hit for action: {action[:50]}...")
+            return cached_result
+
         await self._check_index_freshness()
         index = await self._ensure_index()
 
@@ -252,7 +261,7 @@ class RulesEngine:
         else:
             message = "Rules matched but no specific guidance"
 
-        return {
+        result = {
             "action": action,
             "matched_rules": len(sorted_matches),
             "rules": matched_details,
@@ -260,6 +269,11 @@ class RulesEngine:
             "has_blockers": has_blockers,
             "message": message
         }
+
+        # Cache the result
+        cache.set(cache_key, result)
+
+        return result
 
     async def list_rules(
         self,
