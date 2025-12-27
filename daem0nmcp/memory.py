@@ -1304,6 +1304,9 @@ class MemoryManager:
         # Rebuild index to reflect archived items and new summary
         await self.rebuild_index()
 
+        # Clear recall cache since memories have been modified
+        get_recall_cache().clear()
+
         return {
             "status": "compacted",
             "summary_id": summary_id,
