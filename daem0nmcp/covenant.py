@@ -440,6 +440,39 @@ class CovenantEnforcer:
 # DECORATOR FUNCTIONS
 # ============================================================================
 
+# Callback to get project context from server (set by server.py at import time)
+_get_project_context_callback: Optional[Callable[[str], Any]] = None
+
+
+def set_context_callback(callback: Callable[[str], Any]) -> None:
+    """Register the callback to get project context from server."""
+    global _get_project_context_callback
+    _get_project_context_callback = callback
+
+
+def _get_context_state(project_path: str) -> Optional[Dict[str, Any]]:
+    """
+    Get session state for a project using the registered callback.
+
+    Returns a dict with 'briefed' and 'context_checks' keys, or None if
+    no context is available.
+    """
+    if _get_project_context_callback is None:
+        return None
+
+    try:
+        ctx = _get_project_context_callback(project_path)
+        if ctx is None:
+            return None
+        return {
+            "briefed": getattr(ctx, "briefed", False),
+            "context_checks": getattr(ctx, "context_checks", []),
+        }
+    except Exception as e:
+        logger.warning(f"Failed to get context for {project_path}: {e}")
+        return None
+
+
 def requires_communion(func: Callable) -> Callable:
     """
     Decorator that enforces communion (get_briefing) before tool execution.
@@ -463,11 +496,11 @@ def requires_communion(func: Callable) -> Callable:
             logger.warning(f"Cannot enforce communion for {func.__name__}: no project_path")
             return await func(*args, **kwargs)
 
-        # Get enforcer from context or create new one
-        enforcer = CovenantEnforcer()
-        violation = await enforcer.check_communion(project_path)
-        if violation:
-            return violation
+        # Check state via callback
+        state = _get_context_state(project_path)
+        if state is None or not state.get("briefed", False):
+            logger.info(f"Communion required for {func.__name__}")
+            return CovenantViolation.communion_required(project_path)
 
         return await func(*args, **kwargs)
 
@@ -498,11 +531,44 @@ def requires_counsel(func: Callable) -> Callable:
             logger.warning(f"Cannot enforce counsel for {func.__name__}: no project_path")
             return await func(*args, **kwargs)
 
-        # Get enforcer from context or create new one
-        enforcer = CovenantEnforcer()
-        violation = await enforcer.check_counsel(func.__name__, project_path)
-        if violation:
-            return violation
+        # Check state via callback
+        state = _get_context_state(project_path)
+
+        # First check communion
+        if state is None or not state.get("briefed", False):
+            logger.info(f"Communion required before {func.__name__}")
+            return CovenantViolation.communion_required(project_path)
+
+        # Then check counsel
+        context_checks = state.get("context_checks", [])
+        if not context_checks:
+            logger.info(f"Counsel required before {func.__name__}")
+            return CovenantViolation.counsel_required(func.__name__, project_path)
+
+        # Check if the most recent counsel is still fresh
+        now = datetime.now(timezone.utc)
+        most_recent_age = None
+
+        for check in context_checks:
+            if isinstance(check, dict) and "timestamp" in check:
+                try:
+                    check_time = datetime.fromisoformat(check["timestamp"])
+                    if check_time.tzinfo is None:
+                        check_time = check_time.replace(tzinfo=timezone.utc)
+                    age = (now - check_time).total_seconds()
+                    if most_recent_age is None or age < most_recent_age:
+                        most_recent_age = age
+                except (ValueError, TypeError):
+                    continue
+
+        if most_recent_age is None:
+            # No valid timestamped checks
+            logger.info(f"Counsel required (no valid checks) before {func.__name__}")
+            return CovenantViolation.counsel_required(func.__name__, project_path)
+
+        if most_recent_age > COUNSEL_TTL_SECONDS:
+            logger.info(f"Counsel expired ({most_recent_age:.0f}s old) for {func.__name__}")
+            return CovenantViolation.counsel_expired(func.__name__, project_path, int(most_recent_age))
 
         return await func(*args, **kwargs)
 

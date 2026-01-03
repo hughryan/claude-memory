@@ -79,3 +79,52 @@ def tmp_path(tmp_path_factory):
     yield path
     # Cleanup after test
     shutil.rmtree(path, ignore_errors=True)
+
+
+async def ensure_covenant_compliance(project_path: str):
+    """
+    Helper to ensure covenant compliance for tests.
+
+    Calls get_briefing() and context_check() to satisfy the Sacred Covenant
+    requirements for tools that need communion and/or counsel.
+    """
+    from daem0nmcp import server
+
+    # Ensure communion (get_briefing)
+    await server.get_briefing(project_path=project_path)
+
+    # Ensure counsel (context_check)
+    await server.context_check(
+        description="Test operation",
+        project_path=project_path,
+    )
+
+
+@pytest.fixture
+async def covenant_compliant_project(tmp_path):
+    """
+    Fixture that creates a project and ensures covenant compliance.
+
+    Returns the project path that can be used with tools requiring
+    communion and/or counsel.
+    """
+    from daem0nmcp.database import DatabaseManager
+    from daem0nmcp import server
+
+    project_path = str(tmp_path)
+    storage_path = str(tmp_path / "storage")
+
+    # Initialize database
+    db_manager = DatabaseManager(storage_path)
+    await db_manager.init_db()
+
+    # Clear any cached contexts
+    server._project_contexts.clear()
+
+    # Ensure covenant compliance
+    await ensure_covenant_compliance(project_path)
+
+    yield project_path
+
+    # Cleanup
+    await db_manager.close()

@@ -3,6 +3,8 @@
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
+from conftest import ensure_covenant_compliance
+
 
 class AsyncContextManager:
     def __init__(self, response):
@@ -36,7 +38,7 @@ class TestIngestDocHardening:
     """Test ingestion security and limits."""
 
     @pytest.mark.asyncio
-    async def test_rejects_non_http_schemes(self):
+    async def test_rejects_non_http_schemes(self, covenant_compliant_project):
         """Verify that file://, ftp://, etc. are rejected."""
         from daem0nmcp.server import ingest_doc
 
@@ -52,7 +54,7 @@ class TestIngestDocHardening:
             result = await ingest_doc(
                 url=url,
                 topic="test",
-                project_path="C:\\Users\\dasbl\\PycharmProjects\\Daem0n-MCP"
+                project_path=covenant_compliant_project
             )
             assert "error" in result, f"Should reject {url}"
             assert "scheme" in result["error"].lower() or "invalid" in result["error"].lower()
@@ -81,7 +83,7 @@ class TestIngestDocHardening:
         assert result is None or len(result) <= MAX_CONTENT_SIZE
 
     @pytest.mark.asyncio
-    async def test_enforces_chunk_limit(self):
+    async def test_enforces_chunk_limit(self, covenant_compliant_project):
         """Verify total chunks are limited."""
         from daem0nmcp.server import ingest_doc, MAX_CHUNKS
 
@@ -93,14 +95,14 @@ class TestIngestDocHardening:
                 url="https://example.com/huge",
                 topic="test",
                 chunk_size=100,
-                project_path="C:\\Users\\dasbl\\PycharmProjects\\Daem0n-MCP"
+                project_path=covenant_compliant_project
             )
 
             if "error" not in result:
                 assert result["chunks_created"] <= MAX_CHUNKS
 
     @pytest.mark.asyncio
-    async def test_rejects_ssrf_urls(self):
+    async def test_rejects_ssrf_urls(self, covenant_compliant_project):
         """Verify SSRF protection blocks localhost and private IPs."""
         from daem0nmcp.server import ingest_doc
 
@@ -115,7 +117,7 @@ class TestIngestDocHardening:
             result = await ingest_doc(
                 url=url,
                 topic="test",
-                project_path="C:\\Users\\dasbl\\PycharmProjects\\Daem0n-MCP"
+                project_path=covenant_compliant_project
             )
             assert "error" in result, f"Should reject {url}: {result}"
             error_msg = result["error"].lower()
@@ -124,7 +126,7 @@ class TestIngestDocHardening:
             ]), f"Error message should mention security issue: {result['error']}"
 
     @pytest.mark.asyncio
-    async def test_validates_chunk_size(self):
+    async def test_validates_chunk_size(self, covenant_compliant_project):
         """Verify chunk_size is validated."""
         from daem0nmcp.server import ingest_doc
 
@@ -133,7 +135,7 @@ class TestIngestDocHardening:
             url="https://example.com",
             topic="test",
             chunk_size=-1,
-            project_path="C:\\Users\\dasbl\\PycharmProjects\\Daem0n-MCP"
+            project_path=covenant_compliant_project
         )
         assert "error" in result
         assert "positive" in result["error"].lower()
@@ -143,13 +145,13 @@ class TestIngestDocHardening:
             url="https://example.com",
             topic="test",
             chunk_size=0,
-            project_path="C:\\Users\\dasbl\\PycharmProjects\\Daem0n-MCP"
+            project_path=covenant_compliant_project
         )
         assert "error" in result
         assert "positive" in result["error"].lower()
 
     @pytest.mark.asyncio
-    async def test_validates_topic(self):
+    async def test_validates_topic(self, covenant_compliant_project):
         """Verify topic is validated."""
         from daem0nmcp.server import ingest_doc
 
@@ -157,7 +159,7 @@ class TestIngestDocHardening:
         result = await ingest_doc(
             url="https://example.com",
             topic="",
-            project_path="C:\\Users\\dasbl\\PycharmProjects\\Daem0n-MCP"
+            project_path=covenant_compliant_project
         )
         assert "error" in result
         assert "empty" in result["error"].lower()
@@ -166,7 +168,7 @@ class TestIngestDocHardening:
         result = await ingest_doc(
             url="https://example.com",
             topic="   ",
-            project_path="C:\\Users\\dasbl\\PycharmProjects\\Daem0n-MCP"
+            project_path=covenant_compliant_project
         )
         assert "error" in result
         assert "empty" in result["error"].lower()
@@ -176,88 +178,58 @@ class TestIngestDocMocked:
     """Test ingest_doc with mocked HTTP."""
 
     @pytest.mark.asyncio
-    async def test_ingest_success_with_mocked_response(self):
+    async def test_ingest_success_with_mocked_response(self, covenant_compliant_project):
         """Verify successful ingestion with mocked HTTP."""
-        import tempfile
         from unittest.mock import patch
-        from daem0nmcp.server import ingest_doc, _project_contexts
+        from daem0nmcp.server import ingest_doc
 
         mock_content = "This is documentation about API usage. Use the /users endpoint for user operations."
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            _project_contexts.clear()
+        with patch('daem0nmcp.server._fetch_and_extract', new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = mock_content
+            result = await ingest_doc(
+                url="https://example.com/docs",
+                topic="api-docs",
+                project_path=covenant_compliant_project
+            )
 
-            with patch('daem0nmcp.server._fetch_and_extract', new_callable=AsyncMock) as mock_fetch:
-                mock_fetch.return_value = mock_content
-                result = await ingest_doc(
-                    url="https://example.com/docs",
-                    topic="api-docs",
-                    project_path=temp_dir
-                )
-
-                # Close database connection before cleanup
-                if temp_dir in _project_contexts:
-                    ctx = _project_contexts[temp_dir]
-                    if hasattr(ctx, 'db_manager') and ctx.db_manager:
-                        await ctx.db_manager.close()
-
-            assert result.get("status") == "success"
-            assert result["chunks_created"] >= 1
-            assert result["topic"] == "api-docs"
+        assert result.get("status") == "success"
+        assert result["chunks_created"] >= 1
+        assert result["topic"] == "api-docs"
 
     @pytest.mark.asyncio
-    async def test_ingest_handles_timeout(self):
+    async def test_ingest_handles_timeout(self, covenant_compliant_project):
         """Verify timeout is handled gracefully."""
-        import tempfile
         from unittest.mock import patch
-        from daem0nmcp.server import ingest_doc, _project_contexts
+        from daem0nmcp.server import ingest_doc
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            _project_contexts.clear()
+        # When _fetch_and_extract returns None, ingest_doc returns an error
+        with patch('daem0nmcp.server._fetch_and_extract', new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = None
+            result = await ingest_doc(
+                url="https://slow.example.com/docs",
+                topic="slow-docs",
+                project_path=covenant_compliant_project
+            )
 
-            # When _fetch_and_extract returns None, ingest_doc returns an error
-            with patch('daem0nmcp.server._fetch_and_extract', new_callable=AsyncMock) as mock_fetch:
-                mock_fetch.return_value = None
-                result = await ingest_doc(
-                    url="https://slow.example.com/docs",
-                    topic="slow-docs",
-                    project_path=temp_dir
-                )
-
-                # Close database connection before cleanup
-                if temp_dir in _project_contexts:
-                    ctx = _project_contexts[temp_dir]
-                    if hasattr(ctx, 'db_manager') and ctx.db_manager:
-                        await ctx.db_manager.close()
-
-            assert "error" in result
+        assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_ingest_handles_http_error(self):
+    async def test_ingest_handles_http_error(self, covenant_compliant_project):
         """Verify HTTP errors are handled gracefully."""
-        import tempfile
         from unittest.mock import patch
-        from daem0nmcp.server import ingest_doc, _project_contexts
+        from daem0nmcp.server import ingest_doc
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            _project_contexts.clear()
+        # When _fetch_and_extract returns None, ingest_doc returns an error
+        with patch('daem0nmcp.server._fetch_and_extract', new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = None
+            result = await ingest_doc(
+                url="https://example.com/missing",
+                topic="missing",
+                project_path=covenant_compliant_project
+            )
 
-            # When _fetch_and_extract returns None, ingest_doc returns an error
-            with patch('daem0nmcp.server._fetch_and_extract', new_callable=AsyncMock) as mock_fetch:
-                mock_fetch.return_value = None
-                result = await ingest_doc(
-                    url="https://example.com/missing",
-                    topic="missing",
-                    project_path=temp_dir
-                )
-
-                # Close database connection before cleanup
-                if temp_dir in _project_contexts:
-                    ctx = _project_contexts[temp_dir]
-                    if hasattr(ctx, 'db_manager') and ctx.db_manager:
-                        await ctx.db_manager.close()
-
-            assert "error" in result
+        assert "error" in result
 
 
 class TestFetchAndExtract:

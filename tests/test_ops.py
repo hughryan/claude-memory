@@ -2,6 +2,8 @@
 
 import pytest
 
+from conftest import ensure_covenant_compliance
+
 
 class TestHealthTool:
     """Test health and version reporting."""
@@ -64,6 +66,9 @@ class TestExportImport:
                 must_do=["test action"]
             )
 
+            # Ensure covenant compliance before calling export_data
+            await ensure_covenant_compliance(temp_dir)
+
             result = await export_data(project_path=temp_dir)
 
             assert "memories" in result
@@ -97,11 +102,18 @@ class TestExportImport:
                 content="Imported memory test"
             )
 
+            # Ensure covenant compliance before calling export_data
+            await ensure_covenant_compliance(temp_dir1)
+
             # Export
             exported = await export_data(project_path=temp_dir1)
 
             # Import to second project
             _project_contexts.clear()
+
+            # Ensure covenant compliance for second project before calling import_data
+            await ensure_covenant_compliance(temp_dir2)
+
             result = await import_data(
                 data=exported,
                 project_path=temp_dir2
@@ -145,6 +157,9 @@ class TestMaintenanceTools:
                 content="Important decision to pin"
             )
 
+            # Ensure covenant compliance before calling pin_memory
+            await ensure_covenant_compliance(temp_dir)
+
             result = await pin_memory(
                 memory_id=mem["id"],
                 pinned=True,
@@ -176,6 +191,9 @@ class TestMaintenanceTools:
                 category="learning",
                 content="Old learning to prune"
             )
+
+            # Ensure covenant compliance before calling prune_memories
+            await ensure_covenant_compliance(temp_dir)
 
             # Prune with dry_run first
             result = await prune_memories(
