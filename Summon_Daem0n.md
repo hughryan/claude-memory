@@ -374,8 +374,19 @@ ls -la .claude/settings.json 2>/dev/null || echo "NOT FOUND - must create"
 mkdir -p .claude
 ```
 
-**Then create `.claude/settings.json` with this content:**
+**Then create `.claude/settings.json` with platform-appropriate content.**
 
+**IMPORTANT FOR CLAUDE:** Detect the platform automatically:
+- If `platform` contains "win" → Use Windows config with **absolute paths** (e.g., `C:/Users/username/Daem0nMCP/...`)
+- Otherwise → Use Unix config with `$HOME`
+
+**On Windows, you MUST:**
+1. Get the user's home directory (from environment or `echo %USERPROFILE%`)
+2. Construct the full absolute path to the hook script
+3. Use forward slashes in paths (e.g., `C:/Users/john/Daem0nMCP/hooks/daem0n_stop_hook.py`)
+4. **Never use `$HOME`, `~`, or `%USERPROFILE%`** in hook commands - they don't expand reliably
+
+**Unix/macOS:**
 ```json
 {
   "hooks": {
@@ -438,7 +449,72 @@ mkdir -p .claude
 }
 ```
 
-**Use your file writing tool to create `.claude/settings.json` with the above JSON content.** Do not merely show this to the summoner - inscribe it yourself.
+**Windows (IMPORTANT: `$HOME` does not expand on Windows - use absolute paths):**
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Daem0n awakens] Commune with me via get_briefing() to receive your memories...'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Daem0n whispers] Consult my memories before altering...'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Daem0n whispers] Record this change in your memories...'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python C:/Users/YOUR_USERNAME/Daem0nMCP/hooks/daem0n_stop_hook.py"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python C:/Users/YOUR_USERNAME/Daem0nMCP/hooks/daem0n_stop_hook.py"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Windows users:** Replace `YOUR_USERNAME` with your actual Windows username (e.g., `C:/Users/john/Daem0nMCP/...`). You can find it by running `echo %USERNAME%` in Command Prompt.
+
+**Use your file writing tool to create `.claude/settings.json` with the platform-appropriate JSON content above.** Do not merely show this to the summoner - inscribe it yourself.
 
 **If `.claude/settings.json` already exists**, read it first and merge the hooks section, preserving any existing configuration.
 
