@@ -50,3 +50,70 @@ class TestProjectLinkMigration:
         conn.close()
 
         assert result is not None, "project_links table should exist"
+
+
+class TestLinkManager:
+    """Test the LinkManager class."""
+
+    @pytest.fixture
+    def db_manager(self, tmp_path):
+        from daem0nmcp.database import DatabaseManager
+        return DatabaseManager(str(tmp_path / "storage"))
+
+    @pytest.fixture
+    def link_manager(self, db_manager):
+        from daem0nmcp.links import LinkManager
+        return LinkManager(db_manager)
+
+    @pytest.mark.asyncio
+    async def test_link_projects(self, db_manager, link_manager):
+        """Should create a link between two projects."""
+        await db_manager.init_db()
+
+        result = await link_manager.link_projects(
+            source_path="/repos/backend",
+            linked_path="/repos/client",
+            relationship="same-project"
+        )
+
+        assert result["status"] == "linked"
+        assert result["source_path"] == "/repos/backend"
+        assert result["linked_path"] == "/repos/client"
+
+    @pytest.mark.asyncio
+    async def test_list_linked_projects(self, db_manager, link_manager):
+        """Should list all linked projects."""
+        await db_manager.init_db()
+
+        await link_manager.link_projects("/repos/backend", "/repos/client", "same-project")
+        await link_manager.link_projects("/repos/backend", "/repos/shared", "upstream")
+
+        links = await link_manager.list_linked_projects("/repos/backend")
+
+        assert len(links) == 2
+        paths = {link["linked_path"] for link in links}
+        assert "/repos/client" in paths
+        assert "/repos/shared" in paths
+
+    @pytest.mark.asyncio
+    async def test_unlink_projects(self, db_manager, link_manager):
+        """Should remove a link between projects."""
+        await db_manager.init_db()
+
+        await link_manager.link_projects("/repos/backend", "/repos/client", "same-project")
+        result = await link_manager.unlink_projects("/repos/backend", "/repos/client")
+
+        assert result["status"] == "unlinked"
+
+        links = await link_manager.list_linked_projects("/repos/backend")
+        assert len(links) == 0
+
+    @pytest.mark.asyncio
+    async def test_duplicate_link_rejected(self, db_manager, link_manager):
+        """Should not allow duplicate links."""
+        await db_manager.init_db()
+
+        await link_manager.link_projects("/repos/backend", "/repos/client", "same-project")
+        result = await link_manager.link_projects("/repos/backend", "/repos/client", "same-project")
+
+        assert result["status"] == "already_linked"
