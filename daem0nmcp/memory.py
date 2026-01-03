@@ -687,7 +687,8 @@ class MemoryManager:
             topic, categories, tags, file_path, offset, limit,
             since.isoformat() if since else None,
             until.isoformat() if until else None,
-            include_warnings, decay_half_life_days
+            include_warnings, decay_half_life_days,
+            include_linked
         )
         found, cached_result = cache.get(cache_key)
         if found and cached_result is not None:
@@ -889,6 +890,7 @@ class MemoryManager:
                             tags=tags,
                             file_path=file_path,
                             offset=0,
+                            # Limit linked project results to balance with main project
                             limit=limit // 2 if limit > 1 else 1,
                             since=since,
                             until=until,
