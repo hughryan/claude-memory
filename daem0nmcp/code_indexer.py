@@ -27,6 +27,8 @@ LANGUAGE_CONFIG = {
     '.go': 'go',
     '.rs': 'rust',
     '.java': 'java',
+    '.kt': 'kotlin',
+    '.kts': 'kotlin',
     '.rb': 'ruby',
     '.php': 'php',
     '.c': 'c',
@@ -141,6 +143,14 @@ ENTITY_QUERIES = {
         (method_declaration
             name: (name) @method.name) @method.def
     """,
+    'kotlin': """
+        (class_declaration
+            (type_identifier) @class.name) @class.def
+        (object_declaration
+            (type_identifier) @class.name) @class.def
+        (function_declaration
+            (simple_identifier) @function.name) @function.def
+    """,
 }
 
 
@@ -243,6 +253,8 @@ class TreeSitterIndexer:
         source: bytes
     ) -> Generator[Dict[str, Any], None, None]:
         """Extract entities using language-specific queries."""
+        import tree_sitter
+
         query_text = ENTITY_QUERIES.get(lang)
 
         if not query_text:
@@ -251,6 +263,10 @@ class TreeSitterIndexer:
             return
 
         try:
+            # Use new tree-sitter 0.25+ API with Query constructor and QueryCursor
+            query = tree_sitter.Query(language, query_text)
+            cursor = tree_sitter.QueryCursor(query)
+            matches = list(cursor.matches(tree.root_node))
             query = language.query(query_text)
             captures = query.captures(tree.root_node)
         except Exception as e:
@@ -258,6 +274,28 @@ class TreeSitterIndexer:
             yield from self._walk_tree_fallback(tree.root_node, source)
             return
 
+        # Process matches - each match is (pattern_index, captures_dict)
+        processed_defs = set()
+
+        for pattern_index, captures_dict in matches:
+            # Find the definition capture (ends with .def)
+            def_capture = None
+            def_nodes = []
+            name_nodes = []
+
+            for capture_name, nodes in captures_dict.items():
+                if capture_name.endswith('.def'):
+                    def_capture = capture_name
+                    def_nodes = nodes
+                elif capture_name.endswith('.name'):
+                    name_nodes = nodes
+
+            if not def_nodes:
+                continue
+
+            for def_node in def_nodes:
+                # Skip if already processed
+                node_id = (def_node.start_byte, def_node.end_byte)
         # Group captures by definition
         processed_defs = set()
 
@@ -269,6 +307,18 @@ class TreeSitterIndexer:
                     continue
                 processed_defs.add(node_id)
 
+                entity_type = def_capture.split('.')[0] if def_capture else 'unknown'
+
+                # Find the corresponding name node
+                name = "anonymous"
+                for name_node in name_nodes:
+                    if self._is_descendant(def_node, name_node):
+                        name = name_node.text.decode('utf-8', errors='replace')
+                        break
+
+                # Get first line as signature (up to 200 chars)
+                signature = self._extract_signature(def_node, source)
+                docstring = self._extract_docstring(def_node, source, lang)
                 entity_type = capture_name.split('.')[0]
                 name_node = self._find_name_node(node, captures, capture_name)
                 name = name_node.text.decode('utf-8', errors='replace') if name_node else "anonymous"
@@ -280,6 +330,8 @@ class TreeSitterIndexer:
                 yield {
                     'entity_type': entity_type,
                     'name': name,
+                    'line_start': def_node.start_point[0] + 1,  # 1-indexed
+                    'line_end': def_node.end_point[0] + 1,
                     'line_start': node.start_point[0] + 1,  # 1-indexed
                     'line_end': node.end_point[0] + 1,
                     'signature': signature,
@@ -459,6 +511,8 @@ class CodeIndexManager:
     # Default patterns for all supported languages
     DEFAULT_PATTERNS = [
         '**/*.py', '**/*.js', '**/*.mjs', '**/*.ts', '**/*.tsx',
+        '**/*.go', '**/*.rs', '**/*.java', '**/*.kt', '**/*.kts',
+        '**/*.rb', '**/*.php', '**/*.c', '**/*.h', '**/*.cpp', '**/*.cs',
         '**/*.go', '**/*.rs', '**/*.java', '**/*.rb',
         '**/*.php', '**/*.c', '**/*.h', '**/*.cpp', '**/*.cs',
     ]
