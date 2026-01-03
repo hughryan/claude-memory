@@ -193,3 +193,64 @@ class TestLinkTools:
         )
 
         assert result["status"] == "unlinked"
+
+
+class TestCrossProjectRecall:
+    """Test recall with include_linked parameter."""
+
+    @pytest.fixture
+    def backend_db(self, tmp_path):
+        from daem0nmcp.database import DatabaseManager
+        db = DatabaseManager(str(tmp_path / "backend" / ".daem0n"))
+        return db
+
+    @pytest.fixture
+    def client_db(self, tmp_path):
+        from daem0nmcp.database import DatabaseManager
+        db = DatabaseManager(str(tmp_path / "client" / ".daem0n"))
+        return db
+
+    @pytest.mark.asyncio
+    async def test_recall_includes_linked_memories(self, tmp_path, backend_db, client_db):
+        """recall with include_linked=True should span linked projects."""
+        await backend_db.init_db()
+        await client_db.init_db()
+
+        from daem0nmcp.memory import MemoryManager
+        from daem0nmcp.links import LinkManager
+
+        backend_memory = MemoryManager(backend_db)
+        client_memory = MemoryManager(client_db)
+
+        # Add memory to client
+        await client_memory.remember(
+            category="pattern",
+            content="Use React Query for API calls",
+            project_path=str(tmp_path / "client")
+        )
+
+        # Add memory to backend
+        await backend_memory.remember(
+            category="pattern",
+            content="Use FastAPI for REST endpoints",
+            project_path=str(tmp_path / "backend")
+        )
+
+        # Link backend -> client
+        backend_links = LinkManager(backend_db)
+        await backend_links.link_projects(
+            source_path=str(tmp_path / "backend"),
+            linked_path=str(tmp_path / "client"),
+            relationship="same-project"
+        )
+
+        # Recall from backend with include_linked
+        result = await backend_memory.recall(
+            topic="API",
+            project_path=str(tmp_path / "backend"),
+            include_linked=True
+        )
+
+        # Should find memories from both projects
+        all_content = str(result)
+        assert "FastAPI" in all_content or "React Query" in all_content

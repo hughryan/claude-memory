@@ -637,7 +637,8 @@ async def recall(
     limit: int = 10,
     since: Optional[str] = None,
     until: Optional[str] = None,
-    project_path: Optional[str] = None
+    project_path: Optional[str] = None,
+    include_linked: bool = False
 ) -> Dict[str, Any]:
     """
     Recall memories relevant to a topic using SEMANTIC SIMILARITY.
@@ -664,6 +665,7 @@ async def recall(
         since: Only include memories created after this date (ISO format)
         until: Only include memories created before this date (ISO format)
         project_path: Project root path (for multi-project HTTP server support)
+        include_linked: If True, also search memories from linked projects (read-only)
 
     Returns:
         Categorized memories with relevance scores, pagination metadata, and failure warnings
@@ -706,7 +708,8 @@ async def recall(
         limit=limit,
         since=since_dt,
         until=until_dt,
-        project_path=ctx.project_path
+        project_path=ctx.project_path,
+        include_linked=include_linked
     )
 
 

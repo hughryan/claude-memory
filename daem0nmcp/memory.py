@@ -643,7 +643,8 @@ class MemoryManager:
         until: Optional[datetime] = None,
         project_path: Optional[str] = None,
         include_warnings: bool = True,
-        decay_half_life_days: float = 30.0
+        decay_half_life_days: float = 30.0,
+        include_linked: bool = False
     ) -> Dict[str, Any]:
         """
         Recall memories relevant to a topic using semantic similarity.
@@ -675,6 +676,7 @@ class MemoryManager:
             project_path: Optional project root for file path normalization
             include_warnings: Always include warnings even if not in categories
             decay_half_life_days: How quickly old memories lose relevance
+            include_linked: If True, also search linked projects (read-only)
 
         Returns:
             Dict with categorized memories and relevance scores
@@ -869,6 +871,43 @@ class MemoryManager:
             'summary': " | ".join(summary_parts) if summary_parts else None,
             **by_category
         }
+
+        # Aggregate from linked projects if requested
+        if include_linked and project_path:
+            from .links import LinkManager
+            link_mgr = LinkManager(self.db)
+
+            try:
+                linked_managers = await link_mgr.get_linked_db_managers(project_path)
+
+                for linked_path, linked_db in linked_managers:
+                    try:
+                        linked_memory = MemoryManager(linked_db)
+                        linked_result = await linked_memory.recall(
+                            topic=topic,
+                            categories=categories,
+                            tags=tags,
+                            file_path=file_path,
+                            offset=0,
+                            limit=limit // 2 if limit > 1 else 1,
+                            since=since,
+                            until=until,
+                            project_path=linked_path,
+                            include_warnings=include_warnings,
+                            decay_half_life_days=decay_half_life_days,
+                            include_linked=False  # Don't recurse
+                        )
+
+                        # Merge results, tagging with source
+                        for category in ["decisions", "patterns", "warnings", "learnings"]:
+                            if category in linked_result:
+                                for memory in linked_result[category]:
+                                    memory["_from_linked"] = linked_path
+                                    result.setdefault(category, []).append(memory)
+                    except Exception as e:
+                        logger.warning(f"Could not recall from linked project {linked_path}: {e}")
+            except Exception as e:
+                logger.warning(f"Could not get linked projects: {e}")
 
         # Cache the result
         cache.set(cache_key, result)
