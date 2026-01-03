@@ -138,8 +138,17 @@ class MemoryManager:
                     self._qdrant = QdrantVectorStore(path=qdrant_path)
                     logger.info(f"Initialized Qdrant vector store at: {qdrant_path}")
                 except RuntimeError as e:
-                    # Handle locking errors gracefully (e.g., in concurrent test scenarios)
-                    logger.warning(f"Could not initialize Qdrant (falling back to TF-IDF only): {e}")
+                    error_str = str(e)
+                    if "already accessed by another instance" in error_str:
+                        # Common case: multiple Claude Code sessions for the same project
+                        # TF-IDF fallback works well, so only log at INFO level
+                        logger.info(
+                            "Qdrant locked by another session (falling back to TF-IDF). "
+                            "This is normal with multiple Claude Code sessions for the same project."
+                        )
+                    else:
+                        # Unexpected error - log with full details
+                        logger.warning(f"Could not initialize Qdrant (falling back to TF-IDF only): {e}")
 
     async def _check_index_freshness(self) -> bool:
         """
