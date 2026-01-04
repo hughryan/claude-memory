@@ -13,7 +13,18 @@
 
 **AI Memory & Decision System** - Give AI agents persistent memory and consistent decision-making with *actual* semantic understanding.
 
-## What's New in v2.10.0
+## What's New in v2.11.0
+
+- **Linked Projects (Multi-Repo Support)**: Work across related repositories
+  - Link client/server or other related repos for cross-awareness
+  - `link_projects()` / `unlink_projects()` / `list_linked_projects()`
+  - `recall(include_linked=True)` - Search across linked repos
+  - `consolidate_linked_databases()` - Merge child DBs into unified parent
+  - `get_briefing()` now shows linked project warnings/stats
+  - See `docs/multi-repo-setup.md` for full guide
+  - New skill: `summon_daem0n` for project setup guidance
+
+### Previous Features (v2.10.0)
 
 - **Code Understanding Layer (Phase 2)**: The Daem0n now understands your code structure
   - Multi-language AST parsing via `tree-sitter-language-pack`
