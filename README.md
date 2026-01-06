@@ -595,6 +595,12 @@ python -m daem0nmcp.server
 python start_server.py --port 9876
 ```
 
+## Support
+
+If Daem0nMCP has been useful to you, consider supporting its development:
+
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/vitruvianredux)
+
 ## Uninstallation
 
 See `Banish_Daem0n.md` for complete removal instructions, or quick version:
