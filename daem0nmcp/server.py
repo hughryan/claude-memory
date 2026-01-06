@@ -5103,6 +5103,100 @@ async def context_resource(project_path: str) -> str:
         return f"Error: {e}"
 
 
+async def get_triggered_context_resource(
+    file_path: str,
+    project_path: Optional[str] = None
+) -> str:
+    """
+    MCP Resource implementation for dynamic context injection based on file path.
+
+    When an AI tool accesses this resource with a file path,
+    it returns auto-recalled memories based on matching triggers.
+
+    Args:
+        file_path: The file path to check triggers against
+        project_path: Project root path (defaults to _default_project_path or cwd)
+
+    Returns:
+        JSON string with triggered context or error message
+    """
+    import json
+
+    project_path = project_path or _default_project_path or os.getcwd()
+
+    try:
+        from .context_triggers import ContextTriggerManager
+    except ImportError:
+        from daem0nmcp.context_triggers import ContextTriggerManager
+
+    try:
+        ctx = await get_project_context(project_path)
+        tm = ContextTriggerManager(ctx.db_manager)
+
+        result = await tm.get_triggered_context(
+            project_path=project_path,
+            file_path=file_path
+        )
+
+        if not result["triggers"]:
+            return json.dumps({
+                "file": file_path,
+                "triggers_matched": 0,
+                "context": [],
+                "message": "No triggers matched for this file"
+            })
+
+        # Format for easy reading
+        output = {
+            "file": file_path,
+            "triggers_matched": len(result["triggers"]),
+            "topics_recalled": result.get("topics_recalled", []),
+            "context": []
+        }
+
+        # Include memory context for each topic
+        for topic, recall_result in result.get("memories", {}).items():
+            topic_context = {
+                "topic": topic,
+                "memories": []
+            }
+
+            # Extract memories from the recall result
+            for category in ["decision", "pattern", "warning", "learning"]:
+                category_memories = recall_result.get(category, [])
+                for m in category_memories:
+                    topic_context["memories"].append({
+                        "category": category,
+                        "content": m.get("content", ""),
+                        "worked": m.get("worked")
+                    })
+
+            output["context"].append(topic_context)
+
+        return json.dumps(output, indent=2)
+
+    except Exception as e:
+        logger.error(f"Error in get_triggered_context_resource: {e}")
+        return json.dumps({
+            "file": file_path,
+            "error": str(e)
+        })
+
+
+@mcp.resource("daem0n://triggered/{file_path}")
+async def triggered_context_resource(file_path: str) -> str:
+    """
+    MCP Resource for dynamic context injection based on file path.
+
+    When an AI tool accesses this resource with a file path,
+    it returns auto-recalled memories based on matching triggers.
+
+    Usage: Access daem0n://triggered/src/auth/service.py
+    Returns: Contextually relevant memories for that file
+    """
+    return await get_triggered_context_resource(file_path)
+
+
 # ============================================================================
 # Cleanup
 # ============================================================================

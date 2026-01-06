@@ -570,3 +570,37 @@ async def test_mcp_check_context_triggers_no_match(covenant_compliant_project_fo
 
     assert "triggers" in result
     assert len(result["triggers"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_mcp_resource_triggered_context(covenant_compliant_project_for_triggers):
+    """Test MCP resource for triggered context."""
+    from daem0nmcp import server
+    import json
+
+    # Add a trigger
+    await server.add_context_trigger(
+        trigger_type="file_pattern",
+        pattern="*.py",
+        recall_topic="python",
+        project_path=covenant_compliant_project_for_triggers
+    )
+
+    # Create a memory that matches the topic
+    await server.remember(
+        category="pattern",
+        content="Use type hints in Python",
+        tags=["python"],
+        project_path=covenant_compliant_project_for_triggers
+    )
+
+    # Access the resource directly (simulates MCP resource access)
+    result_json = await server.get_triggered_context_resource(
+        file_path="test.py",
+        project_path=covenant_compliant_project_for_triggers
+    )
+
+    result = json.loads(result_json)
+    assert result["file"] == "test.py"
+    assert result["triggers_matched"] > 0
+    assert len(result["context"]) > 0
