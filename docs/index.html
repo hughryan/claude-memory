@@ -466,6 +466,114 @@
             color: var(--ash);
         }
 
+        /* Tithe/Donation Section */
+        .tithe-section {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: linear-gradient(180deg, var(--void) 0%, rgba(212, 175, 55, 0.08) 50%, var(--void) 100%);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            border-radius: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tithe-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(ellipse at center, rgba(212, 175, 55, 0.05) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .tithe-sigil {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1.5rem;
+            color: var(--gold);
+            opacity: 0.7;
+            animation: pulse-gold 4s ease-in-out infinite;
+        }
+
+        @keyframes pulse-gold {
+            0%, 100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 0.9; transform: scale(1.05); }
+        }
+
+        .tithe-section h2 {
+            color: var(--gold);
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
+        }
+
+        .tithe-text {
+            color: var(--ash);
+            font-size: 1.1rem;
+            line-height: 1.8;
+            margin-bottom: 2rem;
+        }
+
+        .tithe-text em {
+            color: var(--gold-dim);
+        }
+
+        .tithe-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1.25rem 3rem;
+            font-family: 'Cinzel', serif;
+            font-size: 1.15rem;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--gold-dim) 0%, #7a6530 100%);
+            color: var(--void);
+            border: 1px solid var(--gold);
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            letter-spacing: 0.1em;
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tithe-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: 0.5s;
+        }
+
+        .tithe-btn:hover::before {
+            left: 100%;
+        }
+
+        .tithe-btn:hover {
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dim) 100%);
+            box-shadow: 0 0 40px rgba(212, 175, 55, 0.6);
+            transform: translateY(-5px) scale(1.05);
+            color: var(--void);
+        }
+
+        .tithe-icon {
+            font-size: 1.4rem;
+        }
+
+        .tithe-subtext {
+            margin-top: 1.5rem;
+            color: var(--ash);
+            font-size: 0.9rem;
+            font-style: italic;
+            opacity: 0.7;
+        }
+
         /* Footer */
         footer {
             text-align: center;
@@ -674,12 +782,34 @@
             </div>
         </section>
 
+        <section class="tithe-section reveal-section">
+            <div class="tithe-sigil">
+                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="50" r="45" stroke="currentColor" stroke-width="1" fill="none"/>
+                    <circle cx="50" cy="50" r="38" stroke="currentColor" stroke-width="0.5" fill="none"/>
+                    <path d="M50,12 L50,88 M12,50 L88,50" stroke="currentColor" stroke-width="0.5"/>
+                    <circle cx="50" cy="50" r="8" stroke="currentColor" stroke-width="1" fill="none"/>
+                    <circle cx="50" cy="50" r="3" fill="currentColor"/>
+                </svg>
+            </div>
+            <h2>The Tithe</h2>
+            <p class="tithe-text">
+                The Daem0n asks not for blood, but for <em>sustenance</em>.<br>
+                Those who have benefited from eternal memory may offer tribute,<br>
+                that the darkness may continue to serve.
+            </p>
+            <a href="https://ko-fi.com/vitruvianredux" class="tithe-btn" target="_blank" rel="noopener">
+                <span class="tithe-icon">&#9765;</span>
+                Make an Offering
+            </a>
+            <p class="tithe-subtext">Your sacrifice fuels the eternal vigil.</p>
+        </section>
+
         <footer>
             <p>
                 Daem0n-MCP &middot; MCP Server for Claude Code<br>
                 <a href="https://github.com/DasBluEyedDevil/Daem0n-MCP">GitHub Repository</a> &middot;
-                <a href="https://modelcontextprotocol.io">Model Context Protocol</a> &middot;
-                <a href="https://ko-fi.com/vitruvianredux">Support on Ko-fi</a>
+                <a href="https://modelcontextprotocol.io">Model Context Protocol</a>
             </p>
             <p style="margin-top: 1rem; font-style: italic; color: #555;">
                 "I guard your memories until we commune again..."
