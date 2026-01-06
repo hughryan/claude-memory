@@ -16,6 +16,21 @@ def temp_storage():
     shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+@pytest.fixture
+async def memory_manager(temp_storage):
+    """Create a memory manager with temporary storage."""
+    from daem0nmcp.database import DatabaseManager
+    from daem0nmcp.memory import MemoryManager
+
+    db = DatabaseManager(temp_storage)
+    await db.init_db()
+    manager = MemoryManager(db)
+    yield manager
+    if manager._qdrant:
+        manager._qdrant.close()
+    await db.close()
+
+
 class TestMemoryVersionModel:
     """Test the MemoryVersion model structure."""
 
@@ -81,3 +96,21 @@ async def test_memory_versions_has_composite_index(temp_storage):
     )
     assert composite_index_found, \
         f"Expected composite index on (memory_id, version_number), found indexes: {indexes}"
+
+
+@pytest.mark.asyncio
+async def test_remember_creates_initial_version(memory_manager):
+    """When a memory is created, version 1 should be auto-created."""
+    result = await memory_manager.remember(
+        category="decision",
+        content="Use PostgreSQL",
+        rationale="Better JSON support"
+    )
+
+    memory_id = result["id"]
+    versions = await memory_manager.get_memory_versions(memory_id)
+
+    assert len(versions) == 1
+    assert versions[0]["version_number"] == 1
+    assert versions[0]["change_type"] == "created"
+    assert versions[0]["content"] == "Use PostgreSQL"

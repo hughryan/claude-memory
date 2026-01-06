@@ -18,7 +18,7 @@ from pathlib import Path
 from sqlalchemy import select, or_, func, desc
 
 from .database import DatabaseManager
-from .models import Memory, MemoryRelationship
+from .models import Memory, MemoryRelationship, MemoryVersion
 from .config import settings
 from .similarity import (
     TFIDFIndex,
@@ -338,6 +338,21 @@ class MemoryManager:
             await session.flush()
             memory_id = memory.id
 
+            # Create initial version (version 1)
+            version = MemoryVersion(
+                memory_id=memory.id,
+                version_number=1,
+                content=content,
+                rationale=rationale,
+                context=context or {},
+                tags=tags or [],
+                outcome=None,
+                worked=None,
+                change_type="created",
+                change_description="Initial creation"
+            )
+            session.add(version)
+
             # Add to TF-IDF index
             index = await self._ensure_index()
             text = content
@@ -568,6 +583,48 @@ class MemoryManager:
         )
 
         return results
+
+    async def get_memory_versions(
+        self,
+        memory_id: int,
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all versions of a memory in chronological order.
+
+        Args:
+            memory_id: The memory to get versions for
+            limit: Maximum versions to return
+
+        Returns:
+            List of version dicts ordered by version_number ascending
+        """
+        async with self.db.get_session() as session:
+            result = await session.execute(
+                select(MemoryVersion)
+                .where(MemoryVersion.memory_id == memory_id)
+                .order_by(MemoryVersion.version_number.asc())
+                .limit(limit)
+            )
+            versions = result.scalars().all()
+
+            return [
+                {
+                    "id": v.id,
+                    "memory_id": v.memory_id,
+                    "version_number": v.version_number,
+                    "content": v.content,
+                    "rationale": v.rationale,
+                    "context": v.context,
+                    "tags": v.tags,
+                    "outcome": v.outcome,
+                    "worked": v.worked,
+                    "change_type": v.change_type,
+                    "change_description": v.change_description,
+                    "changed_at": v.changed_at.isoformat() if v.changed_at else None
+                }
+                for v in versions
+            ]
 
     async def _check_conflicts(
         self,
