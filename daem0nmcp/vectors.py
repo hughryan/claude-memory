@@ -14,6 +14,8 @@ from typing import Dict, List, Optional, Tuple
 from sentence_transformers import SentenceTransformer
 import numpy as np
 
+from .config import settings
+
 logger = logging.getLogger(__name__)
 
 # Global model instance (lazy loaded, shared across all contexts)
@@ -154,7 +156,7 @@ class HybridSearch:
     def __init__(self, tfidf_index, vector_index: Optional[VectorIndex] = None):
         self.tfidf = tfidf_index
         self.vectors = vector_index or VectorIndex()
-        self.vector_weight = 0.3  # How much to weight vectors vs TF-IDF
+        self.vector_weight = settings.hybrid_vector_weight  # Configurable via DAEM0NMCP_HYBRID_VECTOR_WEIGHT
 
     def search(
         self,

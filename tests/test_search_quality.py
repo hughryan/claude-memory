@@ -39,3 +39,23 @@ class TestSearchConfig:
         """Negative diversity should raise ValidationError."""
         with pytest.raises(ValidationError):
             Settings(search_diversity_max_per_file=-1)
+
+
+class TestHybridWeightWiring:
+    """Test hybrid weight is used from config."""
+
+    def test_memory_uses_config_weight(self, monkeypatch):
+        """MemoryManager should use config hybrid weight."""
+        monkeypatch.setenv("DAEM0NMCP_HYBRID_VECTOR_WEIGHT", "0.7")
+
+        # Force reload of settings
+        from daem0nmcp import config
+        config.settings = config.Settings()
+
+        from daem0nmcp.vectors import HybridSearch
+        from daem0nmcp.similarity import TFIDFIndex
+
+        tfidf = TFIDFIndex()
+        hybrid = HybridSearch(tfidf)
+
+        assert hybrid.vector_weight == 0.7

@@ -216,7 +216,7 @@ class MemoryManager:
         Returns:
             List of (doc_id, score) tuples sorted by score descending
         """
-        vector_weight = 0.3  # Same as HybridSearch.vector_weight
+        vector_weight = settings.hybrid_vector_weight
 
         # Get TF-IDF results
         tfidf_results = self._index.search(query, top_k=top_k * 2, threshold=tfidf_threshold)
