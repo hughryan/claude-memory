@@ -240,7 +240,7 @@ class TreeSitterIndexer:
             relative_path = file_path
 
         # Extract entities using tree-sitter queries
-        for entity in self._extract_entities(tree, language, lang, source):
+        for entity in self._extract_entities(tree, language, lang, source, str(relative_path)):
             entity['project_path'] = str(project_path)
             entity['file_path'] = str(relative_path)
             yield self._make_entity_dict(**entity)
@@ -250,7 +250,8 @@ class TreeSitterIndexer:
         tree,
         language,
         lang: str,
-        source: bytes
+        source: bytes,
+        file_path: str = ""
     ) -> Generator[Dict[str, Any], None, None]:
         """Extract entities using language-specific queries."""
         import tree_sitter
@@ -259,7 +260,7 @@ class TreeSitterIndexer:
 
         if not query_text:
             # Fallback: walk tree manually for basic extraction
-            yield from self._walk_tree_fallback(tree.root_node, source)
+            yield from self._walk_tree_fallback(tree.root_node, source, lang, file_path)
             return
 
         try:
@@ -269,7 +270,7 @@ class TreeSitterIndexer:
             matches = list(cursor.matches(tree.root_node))
         except Exception as e:
             logger.debug(f"Query failed for {lang}: {e}")
-            yield from self._walk_tree_fallback(tree.root_node, source)
+            yield from self._walk_tree_fallback(tree.root_node, source, lang, file_path)
             return
 
         # Process matches - each match is (pattern_index, captures_dict)
@@ -314,6 +315,7 @@ class TreeSitterIndexer:
                 yield {
                     'entity_type': entity_type,
                     'name': name,
+                    'qualified_name': self._compute_qualified_name(def_node, source, lang, file_path),
                     'line_start': def_node.start_point[0] + 1,  # 1-indexed
                     'line_end': def_node.end_point[0] + 1,
                     'signature': signature,
@@ -402,7 +404,9 @@ class TreeSitterIndexer:
             prev = prev.prev_sibling
         return ' '.join(comments) if comments else None
 
-    def _walk_tree_fallback(self, node, source: bytes) -> Generator[Dict[str, Any], None, None]:
+    def _walk_tree_fallback(
+        self, node, source: bytes, lang: str = "", file_path: str = ""
+    ) -> Generator[Dict[str, Any], None, None]:
         """
         Fallback tree walker for languages without specific queries.
 
@@ -422,6 +426,7 @@ class TreeSitterIndexer:
                 yield {
                     'entity_type': entity_type,
                     'name': name,
+                    'qualified_name': self._compute_qualified_name(node, source, lang, file_path),
                     'line_start': node.start_point[0] + 1,
                     'line_end': node.end_point[0] + 1,
                     'signature': self._extract_signature(node, source),
@@ -429,7 +434,7 @@ class TreeSitterIndexer:
                 }
 
         for child in node.children:
-            yield from self._walk_tree_fallback(child, source)
+            yield from self._walk_tree_fallback(child, source, lang, file_path)
 
     def _extract_name_from_node(self, node, source: bytes) -> Optional[str]:
         """Try to extract a name from a node by looking for identifier children."""
@@ -446,6 +451,57 @@ class TreeSitterIndexer:
                         return source[grandchild.start_byte:grandchild.end_byte].decode('utf-8', errors='replace')
         return None
 
+    def _compute_qualified_name(self, node, source: bytes, lang: str, file_path: str) -> str:
+        """
+        Compute fully qualified name by walking parent scopes.
+
+        Examples:
+          - Python class method: module.ClassName.method_name
+          - Nested class: module.Outer.Inner.method
+          - Top-level function: module.function_name
+        """
+        parts = []
+
+        # Walk up the tree collecting scope names
+        current = node.parent
+        while current is not None:
+            scope_name = None
+
+            if lang == 'python':
+                if current.type == 'class_definition':
+                    scope_name = self._extract_name_from_node(current, source)
+            elif lang in ('typescript', 'javascript', 'tsx'):
+                if current.type == 'class_declaration':
+                    scope_name = self._extract_name_from_node(current, source)
+            elif lang == 'go':
+                if current.type == 'type_declaration':
+                    scope_name = self._extract_name_from_node(current, source)
+
+            if scope_name:
+                parts.insert(0, scope_name)
+
+            current = current.parent
+
+        # Add the entity's own name
+        entity_name = self._extract_name_from_node(node, source)
+        if entity_name:
+            parts.append(entity_name)
+
+        # Prepend module name from file path
+        module_name = self._file_path_to_module(file_path)
+        if module_name:
+            parts.insert(0, module_name)
+
+        return '.'.join(parts) if parts else entity_name or "anonymous"
+
+    def _file_path_to_module(self, file_path: str) -> str:
+        """Convert file path to module name."""
+        p = Path(file_path)
+        stem = p.stem
+        if stem == '__init__':
+            return p.parent.name if p.parent.name != '.' else ''
+        return stem
+
     def _make_entity_dict(self, **kwargs) -> Dict[str, Any]:
         """Create a CodeEntity-compatible dictionary."""
         # Include line_start in ID to distinguish same-named entities in different classes
@@ -458,6 +514,7 @@ class TreeSitterIndexer:
             'project_path': kwargs['project_path'],
             'entity_type': kwargs['entity_type'],
             'name': kwargs['name'],
+            'qualified_name': kwargs.get('qualified_name'),
             'file_path': kwargs['file_path'],
             'line_start': kwargs.get('line_start'),
             'line_end': kwargs.get('line_end'),
