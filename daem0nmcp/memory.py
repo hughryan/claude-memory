@@ -11,6 +11,7 @@ This module handles:
 
 import logging
 import os
+import re
 import sys
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime, timezone
@@ -110,6 +111,9 @@ def _infer_tags(content: str, category: str, existing_tags: Optional[List[str]] 
     - perf: performance, optimization, speed improvements
     - warning: category-based or explicit warnings
 
+    Uses word-boundary matching (regex) to avoid false positives
+    like "prefix" triggering "bugfix" or "breakfast" triggering "perf".
+
     Args:
         content: The memory content text
         category: Memory category (decision, pattern, warning, learning)
@@ -122,21 +126,23 @@ def _infer_tags(content: str, category: str, existing_tags: Optional[List[str]] 
     existing = set(t.lower() for t in (existing_tags or []))
     content_lower = content.lower()
 
-    # Bugfix patterns
-    bugfix_patterns = ['fix', 'bug', 'error', 'issue', 'broken', 'crash', 'failure']
-    if any(p in content_lower for p in bugfix_patterns):
+    # Bugfix patterns - use word boundaries to avoid false positives
+    # e.g., "prefix" contains "fix" but shouldn't trigger bugfix
+    bugfix_pattern = r'\b(fix|bug|error|issue|broken|crash|failure)\b'
+    if re.search(bugfix_pattern, content_lower):
         if 'bugfix' not in existing:
             inferred.append('bugfix')
 
-    # Tech debt patterns
-    debt_patterns = ['todo', 'hack', 'workaround', 'temporary', 'temp fix', 'quick fix', 'tech debt', 'refactor later']
-    if any(p in content_lower for p in debt_patterns):
+    # Tech debt patterns - use word boundaries
+    debt_pattern = r'\b(todo|hack|workaround|temporary|quick\s*fix|tech\s*debt|refactor\s*later)\b'
+    if re.search(debt_pattern, content_lower):
         if 'tech-debt' not in existing:
             inferred.append('tech-debt')
 
-    # Performance patterns
-    perf_patterns = ['perf', 'performance', 'slow', 'fast', 'optim', 'speed', 'latency', 'cach']
-    if any(p in content_lower for p in perf_patterns):
+    # Performance patterns - use word boundaries
+    # e.g., "breakfast" contains "fast" but shouldn't trigger perf
+    perf_pattern = r'\b(perf|performance|slow|fast|optim|speed|latency|cache|caching)\b'
+    if re.search(perf_pattern, content_lower):
         if 'perf' not in existing:
             inferred.append('perf')
 
@@ -145,8 +151,9 @@ def _infer_tags(content: str, category: str, existing_tags: Optional[List[str]] 
         if 'warning' not in existing:
             inferred.append('warning')
 
-    # Explicit warning mentions in non-warning categories
-    if category != 'warning' and ('warn' in content_lower or 'avoid' in content_lower or "don't" in content_lower):
+    # Explicit warning mentions in non-warning categories - use word boundaries
+    warning_pattern = r'\b(warn|avoid)\b|don\'t'
+    if category != 'warning' and re.search(warning_pattern, content_lower):
         if 'warning' not in existing:
             inferred.append('warning')
 

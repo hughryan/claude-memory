@@ -82,6 +82,37 @@ class TestInferTags:
         assert "perf" in tags  # 'slow', 'performance'
         assert "bugfix" in tags  # 'fix'
 
+    def test_no_false_positive_on_prefix(self):
+        """Words containing patterns as substrings shouldn't trigger tags."""
+        from daem0nmcp.memory import _infer_tags
+        # "prefix" contains "fix" but shouldn't trigger bugfix
+        tags = _infer_tags("Use prefix conventions", "decision")
+        assert "bugfix" not in tags
+
+    def test_no_false_positive_on_breakfast(self):
+        """'breakfast' contains 'fast' but shouldn't trigger perf."""
+        from daem0nmcp.memory import _infer_tags
+        tags = _infer_tags("Breakfast meeting at 9am", "decision")
+        assert "perf" not in tags
+
+    def test_no_false_positive_on_tissue(self):
+        """'tissue' contains 'issue' but shouldn't trigger bugfix."""
+        from daem0nmcp.memory import _infer_tags
+        tags = _infer_tags("Use tissue paper for packaging", "decision")
+        assert "bugfix" not in tags
+
+    def test_true_positive_still_works_fix(self):
+        """Actual 'fix' word should still trigger bugfix."""
+        from daem0nmcp.memory import _infer_tags
+        tags = _infer_tags("Need to fix the login flow", "decision")
+        assert "bugfix" in tags
+
+    def test_true_positive_still_works_fast(self):
+        """Actual 'fast' word should still trigger perf."""
+        from daem0nmcp.memory import _infer_tags
+        tags = _infer_tags("Make the API fast", "decision")
+        assert "perf" in tags
+
 
 class TestHybridWeightWiring:
     """Test hybrid weight is used from config."""
