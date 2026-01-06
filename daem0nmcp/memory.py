@@ -1019,6 +1019,14 @@ class MemoryManager:
         Returns:
             Updated memory with any auto-generated warnings
         """
+        # Collect data needed for response and nested operations
+        memory_content = None
+        memory_category = None
+        memory_tags = None
+        memory_file_path = None
+        memory_is_permanent = None
+        memory_vector_embedding = None
+
         async with self.db.get_session() as session:
             result = await session.execute(
                 select(Memory).where(Memory.id == memory_id)
@@ -1027,6 +1035,14 @@ class MemoryManager:
 
             if not memory:
                 return {"error": f"Memory {memory_id} not found"}
+
+            # Cache values needed after session closes
+            memory_content = memory.content
+            memory_category = memory.category
+            memory_tags = memory.tags
+            memory_file_path = memory.file_path
+            memory_is_permanent = memory.is_permanent
+            memory_vector_embedding = memory.vector_embedding
 
             memory.outcome = outcome
             memory.worked = worked
@@ -1042,10 +1058,10 @@ class MemoryManager:
             version = MemoryVersion(
                 memory_id=memory_id,
                 version_number=current_max + 1,
-                content=memory.content,
+                content=memory_content,
                 rationale=memory.rationale,
                 context=memory.context,
-                tags=memory.tags,
+                tags=memory_tags,
                 outcome=outcome,
                 worked=worked,
                 change_type="outcome_recorded",
@@ -1054,72 +1070,74 @@ class MemoryManager:
             session.add(version)
 
             # Update Qdrant metadata with worked status
-            if self._qdrant and memory.vector_embedding:
-                embedding_list = vectors.decode(memory.vector_embedding)
+            if self._qdrant and memory_vector_embedding:
+                embedding_list = vectors.decode(memory_vector_embedding)
                 if embedding_list:
                     self._qdrant.upsert_memory(
                         memory_id=memory_id,
                         embedding=embedding_list,
                         metadata={
-                            "category": memory.category,
-                            "tags": memory.tags or [],
-                            "file_path": memory.file_path,
+                            "category": memory_category,
+                            "tags": memory_tags or [],
+                            "file_path": memory_file_path,
                             "worked": worked,
-                            "is_permanent": memory.is_permanent
+                            "is_permanent": memory_is_permanent
                         }
                     )
 
-            response = {
-                "id": memory_id,
-                "content": memory.content,
-                "outcome": outcome,
-                "worked": worked,
+        # Session is now closed - safe to perform nested operations that open new sessions
+
+        response = {
+            "id": memory_id,
+            "content": memory_content,
+            "outcome": outcome,
+            "worked": worked,
+        }
+
+        # If it failed, suggest creating an explicit warning
+        if not worked:
+            response["suggestion"] = {
+                "action": "consider_warning",
+                "message": "This failure will boost this memory in future recalls. Consider also creating an explicit warning with more context.",
+                "example": f'remember("warning", "Avoid: {memory_content[:50]}...", rationale="{outcome}")'
             }
+            logger.info(f"Memory {memory_id} marked as failed - will be boosted as warning")
 
-            # If it failed, suggest creating an explicit warning
-            if not worked:
-                response["suggestion"] = {
-                    "action": "consider_warning",
-                    "message": "This failure will boost this memory in future recalls. Consider also creating an explicit warning with more context.",
-                    "example": f'remember("warning", "Avoid: {memory.content[:50]}...", rationale="{outcome}")'
-                }
-                logger.info(f"Memory {memory_id} marked as failed - will be boosted as warning")
+        response["message"] = (
+            "Outcome recorded - this failure will inform future recalls"
+            if not worked else
+            "Outcome recorded successfully"
+        )
 
-            response["message"] = (
-                "Outcome recorded - this failure will inform future recalls"
-                if not worked else
-                "Outcome recorded successfully"
-            )
+        # Remove from pending decisions (now safe - outer session is closed)
+        try:
+            from .enforcement import SessionManager
+            session_mgr = SessionManager(self.db)
+            # Use passed project_path or fall back to current working directory
+            effective_project_path = project_path or os.getcwd()
+            await session_mgr.remove_pending_decision(effective_project_path, memory_id)
+        except Exception as e:
+            logger.debug(f"Session tracking failed (non-fatal): {e}")
 
-            # Remove from pending decisions
+        # Auto-add to active context if failed (and project_path provided)
+        if not worked and project_path:
             try:
-                from .enforcement import SessionManager
-                session_mgr = SessionManager(self.db)
-                # Use passed project_path or fall back to current working directory
-                effective_project_path = project_path or os.getcwd()
-                await session_mgr.remove_pending_decision(effective_project_path, memory_id)
+                from .active_context import ActiveContextManager
+                acm = ActiveContextManager(self.db)
+                truncated_outcome = outcome[:50] + '...' if len(outcome) > 50 else outcome
+                await acm.add_to_context(
+                    project_path=project_path,
+                    memory_id=memory_id,
+                    reason=f"Auto-activated: Failed decision - {truncated_outcome}",
+                    priority=10  # High priority for failures
+                )
             except Exception as e:
-                logger.debug(f"Session tracking failed (non-fatal): {e}")
+                logger.debug(f"Could not auto-activate failed decision: {e}")
 
-            # Auto-add to active context if failed (and project_path provided)
-            if not worked and project_path:
-                try:
-                    from .active_context import ActiveContextManager
-                    acm = ActiveContextManager(self.db)
-                    truncated_outcome = outcome[:50] + '...' if len(outcome) > 50 else outcome
-                    await acm.add_to_context(
-                        project_path=project_path,
-                        memory_id=memory_id,
-                        reason=f"Auto-activated: Failed decision - {truncated_outcome}",
-                        priority=10  # High priority for failures
-                    )
-                except Exception as e:
-                    logger.debug(f"Could not auto-activate failed decision: {e}")
+        # Clear recall cache since memory outcome changed (affects scoring)
+        get_recall_cache().clear()
 
-            # Clear recall cache since memory outcome changed (affects scoring)
-            get_recall_cache().clear()
-
-            return response
+        return response
 
     async def get_statistics(self) -> Dict[str, Any]:
         """Get memory statistics with learning insights."""
