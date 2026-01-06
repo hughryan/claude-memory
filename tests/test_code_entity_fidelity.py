@@ -67,3 +67,31 @@ class TestQualifiedNames:
         assert helper_func is not None
         assert 'qualified_name' in helper_func
         assert 'models' in helper_func['qualified_name']
+
+
+class TestStableEntityIDs:
+    """Test entity ID stability across line changes."""
+
+    def test_entity_id_stable_after_line_change(self, temp_project):
+        """Adding lines should NOT change entity IDs."""
+        from daem0nmcp.code_indexer import TreeSitterIndexer
+
+        indexer = TreeSitterIndexer()
+        if not indexer.available:
+            pytest.skip("tree-sitter not available")
+
+        py_file = temp_project / "service.py"
+        py_file.write_text('class UserService:\n    def authenticate(self): pass')
+
+        entities1 = list(indexer.index_file(py_file, temp_project))
+
+        # Add lines before (shifts line numbers)
+        py_file.write_text('# comment\n# another\nclass UserService:\n    def authenticate(self): pass')
+
+        entities2 = list(indexer.index_file(py_file, temp_project))
+
+        # IDs should be the same
+        for e1 in entities1:
+            matching = [e2 for e2 in entities2 if e2['name'] == e1['name'] and e2['entity_type'] == e1['entity_type']]
+            assert len(matching) == 1, f"No match for {e1['name']}"
+            assert matching[0]['id'] == e1['id'], f"ID changed for {e1['name']}"
