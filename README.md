@@ -40,6 +40,14 @@ GraphRAG-style community detection and layered recall:
 - `recall_hierarchical(topic)` - Layered retrieval: summaries then details
 - Auto-generated community names from dominant tags
 
+### Auto Entity Extraction (Cognee-style)
+Auto-extract and link code entities from memory content:
+- Auto-extracts functions, classes, files, concepts from memories on `remember()`
+- `recall_by_entity(name)` - Get all memories mentioning an entity
+- `list_entities()` - Most frequently mentioned entities
+- `backfill_entities()` - Extract entities from existing memories
+- Enables queries like "show everything about UserService"
+
 ## What's New in v2.13.0
 
 - **Passive Capture (Auto-Remember)**: Memories without manual calls
