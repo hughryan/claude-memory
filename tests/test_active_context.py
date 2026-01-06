@@ -1,7 +1,9 @@
 """Tests for active working context management."""
 
 import pytest
-from datetime import datetime, timezone
+import tempfile
+import shutil
+from datetime import datetime, timezone, timedelta
 
 from daem0nmcp.models import ActiveContextItem
 
@@ -23,3 +25,222 @@ class TestActiveContextModel:
         assert item.memory_id == 42
         assert item.priority == 1
         assert item.reason == "Critical auth decision"
+
+
+# Fixtures for ActiveContextManager tests
+@pytest.fixture
+def temp_storage():
+    """Create a temporary storage directory."""
+    temp_dir = tempfile.mkdtemp()
+    yield temp_dir
+    shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@pytest.fixture
+async def active_context_manager(temp_storage):
+    """Create an active context manager with temporary storage."""
+    from daem0nmcp.database import DatabaseManager
+    from daem0nmcp.active_context import ActiveContextManager
+
+    db = DatabaseManager(temp_storage)
+    await db.init_db()
+    manager = ActiveContextManager(db)
+    yield manager
+    await db.close()
+
+
+class TestActiveContextManager:
+    """Test the ActiveContextManager class."""
+
+    @pytest.mark.asyncio
+    async def test_add_to_active_context(self, active_context_manager):
+        """Test adding a memory to active context."""
+        from daem0nmcp.memory import MemoryManager
+
+        mem_manager = MemoryManager(active_context_manager.db)
+        mem = await mem_manager.remember(
+            category="decision",
+            content="Critical auth decision"
+        )
+
+        result = await active_context_manager.add_to_context(
+            project_path="/test/project",
+            memory_id=mem["id"],
+            reason="Must inform all auth work"
+        )
+
+        assert result["status"] == "added"
+        assert result["memory_id"] == mem["id"]
+
+    @pytest.mark.asyncio
+    async def test_add_nonexistent_memory_fails(self, active_context_manager):
+        """Test that adding a nonexistent memory returns an error."""
+        result = await active_context_manager.add_to_context(
+            project_path="/test/project",
+            memory_id=99999,
+            reason="This should fail"
+        )
+
+        assert "error" in result
+        assert "not found" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_add_duplicate_memory_returns_already_exists(self, active_context_manager):
+        """Test that adding the same memory twice returns already_exists."""
+        from daem0nmcp.memory import MemoryManager
+
+        mem_manager = MemoryManager(active_context_manager.db)
+        mem = await mem_manager.remember(
+            category="warning",
+            content="Critical warning"
+        )
+
+        # Add first time
+        await active_context_manager.add_to_context(
+            project_path="/test/project",
+            memory_id=mem["id"]
+        )
+
+        # Add second time
+        result = await active_context_manager.add_to_context(
+            project_path="/test/project",
+            memory_id=mem["id"]
+        )
+
+        assert result["status"] == "already_exists"
+
+    @pytest.mark.asyncio
+    async def test_remove_from_context(self, active_context_manager):
+        """Test removing a memory from active context."""
+        from daem0nmcp.memory import MemoryManager
+
+        mem_manager = MemoryManager(active_context_manager.db)
+        mem = await mem_manager.remember(
+            category="pattern",
+            content="Important pattern"
+        )
+
+        await active_context_manager.add_to_context(
+            project_path="/test/project",
+            memory_id=mem["id"]
+        )
+
+        result = await active_context_manager.remove_from_context(
+            project_path="/test/project",
+            memory_id=mem["id"]
+        )
+
+        assert result["status"] == "removed"
+
+    @pytest.mark.asyncio
+    async def test_remove_nonexistent_returns_not_found(self, active_context_manager):
+        """Test removing a nonexistent item returns not_found."""
+        result = await active_context_manager.remove_from_context(
+            project_path="/test/project",
+            memory_id=99999
+        )
+
+        assert result["status"] == "not_found"
+
+    @pytest.mark.asyncio
+    async def test_get_active_context(self, active_context_manager):
+        """Test getting all items in active context."""
+        from daem0nmcp.memory import MemoryManager
+
+        mem_manager = MemoryManager(active_context_manager.db)
+
+        # Add multiple memories
+        mem1 = await mem_manager.remember(category="decision", content="Decision 1")
+        mem2 = await mem_manager.remember(category="warning", content="Warning 1")
+
+        await active_context_manager.add_to_context(
+            project_path="/test/project",
+            memory_id=mem1["id"],
+            priority=1
+        )
+        await active_context_manager.add_to_context(
+            project_path="/test/project",
+            memory_id=mem2["id"],
+            priority=2
+        )
+
+        result = await active_context_manager.get_active_context("/test/project")
+
+        assert result["count"] == 2
+        # Higher priority should come first
+        assert result["items"][0]["memory_id"] == mem2["id"]
+        assert result["items"][1]["memory_id"] == mem1["id"]
+
+    @pytest.mark.asyncio
+    async def test_clear_context(self, active_context_manager):
+        """Test clearing all items from active context."""
+        from daem0nmcp.memory import MemoryManager
+
+        mem_manager = MemoryManager(active_context_manager.db)
+        mem = await mem_manager.remember(category="decision", content="Test")
+
+        await active_context_manager.add_to_context(
+            project_path="/test/project",
+            memory_id=mem["id"]
+        )
+
+        result = await active_context_manager.clear_context("/test/project")
+
+        assert result["status"] == "cleared"
+        assert result["removed_count"] == 1
+
+        # Verify context is empty
+        context = await active_context_manager.get_active_context("/test/project")
+        assert context["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_context_limit(self, active_context_manager):
+        """Test that active context respects the 10-item limit."""
+        from daem0nmcp.memory import MemoryManager
+
+        mem_manager = MemoryManager(active_context_manager.db)
+
+        # Add 10 memories (at limit)
+        for i in range(10):
+            mem = await mem_manager.remember(
+                category="decision",
+                content=f"Decision {i}"
+            )
+            result = await active_context_manager.add_to_context(
+                project_path="/test/project",
+                memory_id=mem["id"]
+            )
+            assert result["status"] == "added"
+
+        # 11th should fail
+        mem11 = await mem_manager.remember(
+            category="decision",
+            content="Decision 11"
+        )
+        result = await active_context_manager.add_to_context(
+            project_path="/test/project",
+            memory_id=mem11["id"]
+        )
+
+        assert result["error"] == "CONTEXT_FULL"
+
+    @pytest.mark.asyncio
+    async def test_cleanup_expired(self, active_context_manager):
+        """Test cleanup of expired context items."""
+        from daem0nmcp.memory import MemoryManager
+
+        mem_manager = MemoryManager(active_context_manager.db)
+        mem = await mem_manager.remember(category="decision", content="Temp decision")
+
+        # Add with past expiry
+        past = datetime.now(timezone.utc) - timedelta(hours=1)
+        await active_context_manager.add_to_context(
+            project_path="/test/project",
+            memory_id=mem["id"],
+            expires_at=past
+        )
+
+        result = await active_context_manager.cleanup_expired("/test/project")
+
+        assert result["status"] == "cleaned"
+        assert result["expired_count"] == 1
