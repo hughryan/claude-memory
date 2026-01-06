@@ -17,8 +17,9 @@ A smarter MCP server that provides:
 11. Data export/import for backup and migration
 12. Memory maintenance (pin, archive, prune, cleanup)
 13. Code understanding via tree-sitter parsing
+14. Active working context (MemGPT-style always-hot memories)
 
-35 Tools:
+39 Tools:
 - remember: Store a decision, pattern, warning, or learning (with file association)
 - recall: Retrieve relevant memories for a topic (semantic search)
 - recall_for_file: Get all memories for a specific file
@@ -48,6 +49,10 @@ A smarter MCP server that provides:
 - link_projects: Create a link to another project for cross-repo memory awareness
 - unlink_projects: Remove a link to another project
 - list_linked_projects: List all linked projects
+- set_active_context: Add a memory to the active working context
+- get_active_context: Get all memories in the active working context
+- remove_from_active_context: Remove a memory from active context
+- clear_active_context: Clear all memories from active context
 """
 
 import sys
@@ -4058,6 +4063,155 @@ async def consolidate_linked_databases(
         target_path=ctx.project_path,
         archive_sources=archive_sources
     )
+
+
+# ============================================================================
+# Active Working Context Tools (MemGPT-style always-hot memories)
+# ============================================================================
+
+@mcp.tool()
+@with_request_id
+async def set_active_context(
+    memory_id: int,
+    reason: Optional[str] = None,
+    priority: int = 0,
+    expires_in_hours: Optional[int] = None,
+    project_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Add a memory to the active working context.
+
+    Active context memories are always-hot - they're auto-included in
+    briefings and available for injection into other responses.
+
+    Use this for:
+    - Critical decisions that must inform all work
+    - Active warnings that should never be forgotten
+    - Current focus areas
+
+    Args:
+        memory_id: Memory to add to active context
+        reason: Why this memory should stay hot (helps future understanding)
+        priority: Higher = shown first (default: 0)
+        expires_in_hours: Auto-remove after N hours (default: never)
+        project_path: Project root path (REQUIRED)
+
+    Returns:
+        Status of the operation
+    """
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
+    try:
+        from .active_context import ActiveContextManager
+    except ImportError:
+        from daem0nmcp.active_context import ActiveContextManager
+
+    ctx = await get_project_context(project_path)
+    acm = ActiveContextManager(ctx.db_manager)
+
+    expires_at = None
+    if expires_in_hours:
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)
+
+    return await acm.add_to_context(
+        project_path=ctx.project_path,
+        memory_id=memory_id,
+        reason=reason,
+        priority=priority,
+        expires_at=expires_at
+    )
+
+
+@mcp.tool()
+@with_request_id
+async def get_active_context(
+    project_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Get all memories in the active working context.
+
+    These are the always-hot memories that inform all work.
+    Returns full memory content, ordered by priority.
+
+    Args:
+        project_path: Project root path (REQUIRED)
+
+    Returns:
+        List of active context items with full memory content
+    """
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
+    try:
+        from .active_context import ActiveContextManager
+    except ImportError:
+        from daem0nmcp.active_context import ActiveContextManager
+
+    ctx = await get_project_context(project_path)
+    acm = ActiveContextManager(ctx.db_manager)
+
+    return await acm.get_active_context(ctx.project_path)
+
+
+@mcp.tool()
+@with_request_id
+async def remove_from_active_context(
+    memory_id: int,
+    project_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Remove a memory from the active working context.
+
+    Args:
+        memory_id: Memory to remove from active context
+        project_path: Project root path (REQUIRED)
+
+    Returns:
+        Status of the operation
+    """
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
+    try:
+        from .active_context import ActiveContextManager
+    except ImportError:
+        from daem0nmcp.active_context import ActiveContextManager
+
+    ctx = await get_project_context(project_path)
+    acm = ActiveContextManager(ctx.db_manager)
+
+    return await acm.remove_from_context(ctx.project_path, memory_id)
+
+
+@mcp.tool()
+@with_request_id
+async def clear_active_context(
+    project_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Clear all memories from the active working context.
+
+    Use this when switching focus or starting fresh.
+
+    Args:
+        project_path: Project root path (REQUIRED)
+
+    Returns:
+        Number of items removed
+    """
+    if not project_path and not _default_project_path:
+        return _missing_project_path_error()
+
+    try:
+        from .active_context import ActiveContextManager
+    except ImportError:
+        from daem0nmcp.active_context import ActiveContextManager
+
+    ctx = await get_project_context(project_path)
+    acm = ActiveContextManager(ctx.db_manager)
+
+    return await acm.clear_context(ctx.project_path)
 
 
 # ============================================================================
