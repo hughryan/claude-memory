@@ -4454,6 +4454,48 @@ async def get_community_details(
     return await cm.get_community_members(community_id)
 
 
+@mcp.tool()
+@with_request_id
+@requires_communion
+async def recall_hierarchical(
+    topic: str,
+    include_members: bool = False,
+    limit: int = 10,
+    project_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Hierarchical recall - community summaries first, then individual memories.
+
+    Use this for a GraphRAG-style layered response:
+    1. First shows relevant community summaries (high-level overview)
+    2. Then shows individual memories (detailed)
+
+    Example workflow:
+    1. recall_hierarchical("authentication") -> see auth community summary
+    2. get_community_details(community_id) -> drill into specifics
+
+    Args:
+        topic: What you're looking for
+        include_members: Include full member content in community results
+        limit: Max results per layer
+        project_path: Project root path (REQUIRED)
+
+    Returns:
+        Communities section (summaries) and memories section (details)
+    """
+    if project_path is None and not _default_project_path:
+        return _missing_project_path_error()
+
+    ctx = await get_project_context(project_path)
+
+    return await ctx.memory_manager.recall_hierarchical(
+        topic=topic,
+        project_path=project_path or _default_project_path,
+        include_members=include_members,
+        limit=limit
+    )
+
+
 # ============================================================================
 # MCP RESOURCES - Automatic Context Injection
 # ============================================================================

@@ -274,3 +274,17 @@ async def test_hierarchical_recall(memory_manager, temp_storage):
     assert "memories" in result
     # Should have at least one auth-related community
     assert len(result["communities"]) >= 1
+
+
+@pytest.mark.asyncio
+async def test_mcp_recall_hierarchical(covenant_compliant_project):
+    """Test the MCP tool for hierarchical recall."""
+    from daem0nmcp import server
+
+    result = await server.recall_hierarchical(
+        topic="authentication",
+        project_path=covenant_compliant_project
+    )
+
+    assert "communities" in result
+    assert "memories" in result
