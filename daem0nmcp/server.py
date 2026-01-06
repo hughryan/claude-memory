@@ -4331,6 +4331,130 @@ async def get_memory_at_time(
 
 
 # ============================================================================
+# COMMUNITY MANAGEMENT TOOLS - GraphRAG-style Hierarchical Summarization
+# ============================================================================
+
+
+@mcp.tool()
+@with_request_id
+@requires_communion
+async def rebuild_communities(
+    min_community_size: int = 2,
+    project_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Detect and save memory communities based on tag co-occurrence.
+
+    Communities are clusters of related memories that share tags.
+    Each community gets an auto-generated summary.
+
+    Use this to:
+    - Get high-level overviews of memory clusters
+    - Enable hierarchical recall (summary -> details)
+
+    Args:
+        min_community_size: Minimum members for a community (default: 2)
+        project_path: Project root path (REQUIRED)
+
+    Returns:
+        Number of communities created
+    """
+    if project_path is None and not _default_project_path:
+        return _missing_project_path_error()
+
+    from .communities import CommunityManager
+
+    ctx = await get_project_context(project_path)
+    cm = CommunityManager(ctx.db_manager)
+
+    # Detect communities
+    communities = await cm.detect_communities(
+        project_path=project_path or _default_project_path,
+        min_community_size=min_community_size
+    )
+
+    # Save to database
+    result = await cm.save_communities(
+        project_path or _default_project_path,
+        communities
+    )
+
+    return {
+        "status": "rebuilt",
+        "communities_found": len(communities),
+        **result
+    }
+
+
+@mcp.tool()
+@with_request_id
+@requires_communion
+async def list_communities(
+    level: Optional[int] = None,
+    project_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    List all memory communities with their summaries.
+
+    Use this for high-level overview before drilling into specifics.
+
+    Args:
+        level: Filter by hierarchy level (0=most specific)
+        project_path: Project root path (REQUIRED)
+
+    Returns:
+        List of communities with summaries
+    """
+    if project_path is None and not _default_project_path:
+        return _missing_project_path_error()
+
+    from .communities import CommunityManager
+
+    ctx = await get_project_context(project_path)
+    cm = CommunityManager(ctx.db_manager)
+
+    communities = await cm.get_communities(
+        project_path or _default_project_path,
+        level
+    )
+
+    return {
+        "count": len(communities),
+        "communities": communities
+    }
+
+
+@mcp.tool()
+@with_request_id
+@requires_communion
+async def get_community_details(
+    community_id: int,
+    project_path: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Get full details for a community including all member memories.
+
+    Use this to "drill down" from a community summary to specifics.
+
+    Args:
+        community_id: ID of the community to expand
+        project_path: Project root path (REQUIRED)
+
+    Returns:
+        Community summary and all member memories
+    """
+    if project_path is None and not _default_project_path:
+        return _missing_project_path_error()
+
+    from .communities import CommunityManager
+
+    ctx = await get_project_context(project_path)
+    cm = CommunityManager(ctx.db_manager)
+
+    return await cm.get_community_members(community_id)
+
+
+# ============================================================================
 # MCP RESOURCES - Automatic Context Injection
 # ============================================================================
 # These resources are automatically injected into the context window

@@ -140,3 +140,105 @@ async def test_detect_communities_by_tags(community_manager, memory_manager):
     auth_community = next((c for c in communities if "auth" in c["tags"]), None)
     assert auth_community is not None
     assert auth_community["member_count"] == 2
+
+
+@pytest.fixture
+async def covenant_compliant_project(temp_storage):
+    """Create a project that passes communion checks."""
+    from daem0nmcp import server
+    # Reset server state
+    server._project_contexts.clear()
+
+    # Get briefing to initialize (establishes communion)
+    await server.get_briefing(project_path=temp_storage)
+    yield temp_storage
+
+
+@pytest.mark.asyncio
+async def test_mcp_rebuild_communities(covenant_compliant_project):
+    """Test the MCP tool for rebuilding communities."""
+    from daem0nmcp import server
+
+    # Create some memories with tags
+    await server.remember(
+        category="decision", content="Use JWT",
+        tags=["auth", "jwt"],
+        project_path=covenant_compliant_project
+    )
+    await server.remember(
+        category="pattern", content="Validate tokens",
+        tags=["auth", "jwt", "validation"],
+        project_path=covenant_compliant_project
+    )
+
+    # Rebuild communities
+    result = await server.rebuild_communities(
+        project_path=covenant_compliant_project
+    )
+
+    assert "created_count" in result
+    assert result["created_count"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_mcp_list_communities(covenant_compliant_project):
+    """Test the MCP tool for listing communities."""
+    from daem0nmcp import server
+
+    # Create memories and build communities first
+    await server.remember(
+        category="decision", content="Use Redis caching",
+        tags=["cache", "redis"],
+        project_path=covenant_compliant_project
+    )
+    await server.remember(
+        category="pattern", content="Cache invalidation",
+        tags=["cache", "redis", "invalidation"],
+        project_path=covenant_compliant_project
+    )
+
+    await server.rebuild_communities(project_path=covenant_compliant_project)
+
+    # List communities
+    result = await server.list_communities(
+        project_path=covenant_compliant_project
+    )
+
+    assert "count" in result
+    assert "communities" in result
+
+
+@pytest.mark.asyncio
+async def test_mcp_get_community_details(covenant_compliant_project):
+    """Test the MCP tool for getting community details."""
+    from daem0nmcp import server
+
+    # Create memories
+    await server.remember(
+        category="decision", content="Use PostgreSQL",
+        tags=["database", "postgres"],
+        project_path=covenant_compliant_project
+    )
+    await server.remember(
+        category="pattern", content="Connection pooling",
+        tags=["database", "postgres", "performance"],
+        project_path=covenant_compliant_project
+    )
+
+    # Build communities
+    await server.rebuild_communities(project_path=covenant_compliant_project)
+
+    # Get the list to find a community ID
+    communities = await server.list_communities(
+        project_path=covenant_compliant_project
+    )
+
+    if communities["count"] > 0:
+        community_id = communities["communities"][0]["id"]
+        result = await server.get_community_details(
+            community_id=community_id,
+            project_path=covenant_compliant_project
+        )
+
+        assert "community_id" in result
+        assert "members" in result
