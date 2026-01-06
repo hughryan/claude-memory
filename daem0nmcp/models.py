@@ -400,3 +400,59 @@ class ActiveContextItem(Base):
 
     # ORM relationship
     memory = orm_relationship("Memory")
+
+
+class MemoryCommunity(Base):
+    """
+    A cluster of related memories with a generated summary.
+
+    Inspired by GraphRAG's hierarchical community detection.
+
+    Communities are auto-generated based on:
+    - Tag co-occurrence (memories sharing tags cluster together)
+    - Semantic similarity (similar content clusters together)
+
+    Levels:
+    - 0: Leaf communities (most specific)
+    - 1+: Parent communities (aggregations)
+
+    Use cases:
+    - "Give me an overview of auth decisions" -> community summary
+    - "Drill into JWT specifics" -> community members
+    """
+    __tablename__ = "memory_communities"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Which project this belongs to
+    project_path = Column(String, nullable=False, index=True)
+
+    # Human-readable name (auto-generated from dominant tags)
+    name = Column(String, nullable=False)
+
+    # AI-generated summary of community members
+    summary = Column(Text, nullable=False)
+
+    # Tags that define this community (union of member tags)
+    tags = Column(JSON, default=list)
+
+    # Member statistics
+    member_count = Column(Integer, default=0)
+    member_ids = Column(JSON, default=list)  # List of memory IDs
+
+    # Hierarchy level (0 = leaf, higher = more abstract)
+    level = Column(Integer, default=0)
+
+    # Parent community (for hierarchy)
+    parent_id = Column(Integer, ForeignKey("memory_communities.id", ondelete="SET NULL"), nullable=True)
+
+    # Vector embedding for community summary (for semantic search)
+    vector_embedding = Column(LargeBinary, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                       onupdate=lambda: datetime.now(timezone.utc))
+
+    # ORM relationship for hierarchy
+    parent = orm_relationship("MemoryCommunity", remote_side=[id], backref="children")
