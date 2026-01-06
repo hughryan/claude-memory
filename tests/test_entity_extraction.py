@@ -66,3 +66,47 @@ class TestMemoryEntityRefModel:
         assert ref.relationship == "about"
         assert ref.context_snippet is None
         # Note: relationship default ('mentions') is applied at DB insert time, not object creation
+
+
+@pytest.fixture
+def extractor():
+    """Create an entity extractor."""
+    from daem0nmcp.entity_extractor import EntityExtractor
+    return EntityExtractor()
+
+
+class TestEntityExtractor:
+    """Test entity extraction from text."""
+
+    def test_extract_function_names(self, extractor):
+        """Should extract function names from content."""
+        text = "Call authenticate_user() to verify the token, then call get_permissions()"
+        entities = extractor.extract_entities(text)
+
+        functions = [e for e in entities if e["type"] == "function"]
+        names = [f["name"] for f in functions]
+
+        assert "authenticate_user" in names
+        assert "get_permissions" in names
+
+    def test_extract_class_names(self, extractor):
+        """Should extract class names from content."""
+        text = "The UserService class handles auth. Use AuthController for API endpoints."
+        entities = extractor.extract_entities(text)
+
+        classes = [e for e in entities if e["type"] == "class"]
+        names = [c["name"] for c in classes]
+
+        assert "UserService" in names
+        assert "AuthController" in names
+
+    def test_extract_file_paths(self, extractor):
+        """Should extract file paths from content."""
+        text = "Edit src/auth/service.py and update tests/test_auth.py"
+        entities = extractor.extract_entities(text)
+
+        files = [e for e in entities if e["type"] == "file"]
+        names = [f["name"] for f in files]
+
+        assert "src/auth/service.py" in names
+        assert "tests/test_auth.py" in names
