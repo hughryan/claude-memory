@@ -944,7 +944,8 @@ class MemoryManager:
         self,
         memory_id: int,
         outcome: str,
-        worked: bool
+        worked: bool,
+        project_path: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Record the outcome of a decision/pattern to learn from it.
@@ -956,6 +957,7 @@ class MemoryManager:
             memory_id: The memory to update
             outcome: What actually happened
             worked: Did it work out?
+            project_path: Optional project path for auto-activating failed decisions
 
         Returns:
             Updated memory with any auto-generated warnings
@@ -1015,11 +1017,26 @@ class MemoryManager:
             try:
                 from .enforcement import SessionManager
                 session_mgr = SessionManager(self.db)
-                # Use current working directory as project_path since it's not passed in
-                project_path = os.getcwd()
-                await session_mgr.remove_pending_decision(project_path, memory_id)
+                # Use passed project_path or fall back to current working directory
+                effective_project_path = project_path or os.getcwd()
+                await session_mgr.remove_pending_decision(effective_project_path, memory_id)
             except Exception as e:
                 logger.debug(f"Session tracking failed (non-fatal): {e}")
+
+            # Auto-add to active context if failed (and project_path provided)
+            if not worked and project_path:
+                try:
+                    from .active_context import ActiveContextManager
+                    acm = ActiveContextManager(self.db)
+                    truncated_outcome = outcome[:50] + '...' if len(outcome) > 50 else outcome
+                    await acm.add_to_context(
+                        project_path=project_path,
+                        memory_id=memory_id,
+                        reason=f"Auto-activated: Failed decision - {truncated_outcome}",
+                        priority=10  # High priority for failures
+                    )
+                except Exception as e:
+                    logger.debug(f"Could not auto-activate failed decision: {e}")
 
             # Clear recall cache since memory outcome changed (affects scoring)
             get_recall_cache().clear()

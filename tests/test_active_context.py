@@ -403,3 +403,46 @@ class TestBriefingIncludesActiveContext:
         assert "active_context" in briefing
         assert briefing["active_context"]["count"] == 1
         assert briefing["active_context"]["items"][0]["memory_id"] == mem["id"]
+
+
+class TestAutoActivationOnFailure:
+    """Test auto-activation of failed decisions in active context."""
+
+    @pytest.mark.asyncio
+    async def test_failed_decision_auto_activates(self, temp_storage):
+        """Failed decisions should auto-activate in context."""
+        from daem0nmcp.database import DatabaseManager
+        from daem0nmcp.memory import MemoryManager
+        from daem0nmcp.active_context import ActiveContextManager
+
+        db = DatabaseManager(temp_storage)
+        await db.init_db()
+
+        try:
+            mem_manager = MemoryManager(db)
+
+            # Create a decision
+            mem = await mem_manager.remember(
+                category="decision",
+                content="Use synchronous DB calls",
+                project_path=temp_storage
+            )
+
+            # Record it as failed
+            await mem_manager.record_outcome(
+                memory_id=mem["id"],
+                outcome="Caused timeout issues",
+                worked=False,
+                project_path=temp_storage
+            )
+
+            # Check active context
+            acm = ActiveContextManager(db)
+            context = await acm.get_active_context(temp_storage)
+
+            # Failed decision should be auto-added
+            assert context["count"] == 1
+            assert context["items"][0]["memory_id"] == mem["id"]
+            assert "failed" in context["items"][0]["reason"].lower()
+        finally:
+            await db.close()

@@ -876,10 +876,12 @@ async def record_outcome(
         return _missing_project_path_error()
 
     ctx = await get_project_context(project_path)
+    effective_project_path = project_path or _default_project_path
     return await ctx.memory_manager.record_outcome(
         memory_id=memory_id,
         outcome=outcome,
-        worked=worked
+        worked=worked,
+        project_path=effective_project_path
     )
 
 
