@@ -13,6 +13,28 @@
 
 **AI Memory & Decision System** - Give AI agents persistent memory and consistent decision-making with *actual* semantic understanding.
 
+## What's New in v2.15.0
+
+### Iteration 1: Search Quality
+- **Configurable hybrid weight**: `DAEM0NMCP_HYBRID_VECTOR_WEIGHT` (0.0-1.0)
+- **Result diversity**: `DAEM0NMCP_SEARCH_DIVERSITY_MAX_PER_FILE` limits same-file results
+- **Tag inference**: Auto-adds `bugfix`, `tech-debt`, `perf`, `warning` tags
+
+### Iteration 2: Code Entity Fidelity
+- **Qualified names**: Entities have `module.Class.method` identifiers
+- **Stable IDs**: Line changes don't invalidate entity IDs
+- **Import extraction**: Files track their imports for dependency analysis
+
+### Iteration 3: Incremental Indexing
+- **File hash tracking**: Only re-parses changed files
+- **`index_file_if_changed()`**: Efficient single-file re-indexing
+- **FileHash model**: Persists content hashes
+
+### Iteration 4: Performance & UX
+- **Parse tree caching**: Avoids re-parsing unchanged files
+- **Extended config**: `embedding_model`, `parse_tree_cache_maxsize`
+- **Enhanced health**: Code index stats, staleness detection
+
 ## What's New in v2.14.0
 
 ### Active Working Context (MemGPT-style)
