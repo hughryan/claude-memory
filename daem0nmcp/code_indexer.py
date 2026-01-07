@@ -1023,3 +1023,126 @@ class CodeIndexManager:
                 'affected_entities': affected,
                 'message': f"Found {len(affected)} entities that may be affected",
             }
+
+    async def index_file_if_changed(
+        self,
+        file_path: Path,
+        project_path: Path,
+        force: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Index a single file only if its content has changed.
+
+        Returns:
+            Dict with changed, entities_count, file_path, reason
+        """
+        if file_path.suffix.lower() not in LANGUAGE_CONFIG:
+            return {'changed': False, 'reason': 'unsupported_extension'}
+
+        if self._should_skip(file_path):
+            return {'changed': False, 'reason': 'excluded_directory'}
+
+        try:
+            rel_path = str(file_path.relative_to(project_path))
+        except ValueError:
+            rel_path = str(file_path)
+
+        project_str = str(project_path.resolve())
+
+        # Compute current hash
+        try:
+            current_hash = hashlib.sha256(file_path.read_bytes()).hexdigest()
+        except (OSError, IOError) as e:
+            return {'changed': False, 'error': str(e)}
+
+        # Check stored hash
+        if not force and self.db is not None:
+            stored_hash = await self._get_stored_hash(project_str, rel_path)
+            if stored_hash == current_hash:
+                return {'changed': False, 'reason': 'unchanged'}
+
+        # Re-index
+        entities = list(self.indexer.index_file(file_path, project_path))
+
+        if self.db is not None:
+            await self._store_file_entities(entities, project_str, rel_path, current_hash)
+
+        return {'changed': True, 'entities_count': len(entities)}
+
+    async def _get_stored_hash(self, project_path: str, file_path: str) -> Optional[str]:
+        """Get stored content hash for a file."""
+        from .models import FileHash
+        from sqlalchemy import select
+
+        async with self.db.get_session() as session:
+            result = await session.execute(
+                select(FileHash.content_hash).where(
+                    FileHash.project_path == project_path,
+                    FileHash.file_path == file_path
+                )
+            )
+            row = result.scalar_one_or_none()
+            return row
+
+    async def _store_file_entities(
+        self,
+        entities: List[Dict],
+        project_path: str,
+        file_path: str,
+        content_hash: str
+    ) -> None:
+        """Store entities for a single file, replacing existing."""
+        from .models import CodeEntity, FileHash
+        from sqlalchemy import delete, and_, select
+
+        async with self.db.get_session() as session:
+            # Delete existing entities for this file only
+            await session.execute(
+                delete(CodeEntity).where(
+                    and_(
+                        CodeEntity.project_path == project_path,
+                        CodeEntity.file_path == file_path
+                    )
+                )
+            )
+
+            # Insert new entities
+            for entity_dict in entities:
+                entity = CodeEntity(
+                    id=entity_dict['id'],
+                    project_path=entity_dict['project_path'],
+                    entity_type=entity_dict['entity_type'],
+                    name=entity_dict['name'],
+                    qualified_name=entity_dict.get('qualified_name'),
+                    file_path=entity_dict['file_path'],
+                    line_start=entity_dict.get('line_start'),
+                    line_end=entity_dict.get('line_end'),
+                    signature=entity_dict.get('signature'),
+                    docstring=entity_dict.get('docstring'),
+                    calls=entity_dict.get('calls', []),
+                    called_by=entity_dict.get('called_by', []),
+                    imports=entity_dict.get('imports', []),
+                    inherits=entity_dict.get('inherits', []),
+                    indexed_at=entity_dict.get('indexed_at'),
+                )
+                session.add(entity)
+
+            # Upsert file hash
+            existing = await session.execute(
+                select(FileHash).where(
+                    FileHash.project_path == project_path,
+                    FileHash.file_path == file_path
+                )
+            )
+            fh = existing.scalar_one_or_none()
+            if fh:
+                fh.content_hash = content_hash
+                fh.indexed_at = datetime.now(timezone.utc)
+            else:
+                session.add(FileHash(
+                    project_path=project_path,
+                    file_path=file_path,
+                    content_hash=content_hash
+                ))
+
+            await session.commit()
