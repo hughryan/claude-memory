@@ -204,6 +204,70 @@ python -m daem0nmcp.cli remember \
   --json
 ```
 
+## The Enhanced Search (v2.15.0)
+
+*The Daem0n's sight grows keener with each iteration...*
+
+### Tuning the Inner Eye
+
+```python
+# Environment variables to fine-tune search
+DAEM0NMCP_HYBRID_VECTOR_WEIGHT=0.5      # 0.0 = TF-IDF only, 1.0 = vectors only
+DAEM0NMCP_SEARCH_DIVERSITY_MAX_PER_FILE=3  # Limit results from same source
+```
+
+### Automatic Tag Inference
+
+The Daem0n now reads between the lines:
+- Content with "fix", "bug", "error" → `bugfix` tag
+- Content with "todo", "hack", "workaround" → `tech-debt` tag
+- Content with "cache", "performance", "slow" → `perf` tag
+- Warning category → `warning` tag automatically
+
+### Code Entity Fidelity
+
+Entities now bear their true names:
+```python
+# Qualified names: module.Class.method
+find_code("UserService.authenticate")
+
+# Stable IDs survive line changes
+# Add comments, imports - entities retain identity
+```
+
+### Incremental Indexing
+
+The Daem0n only re-parses what changes:
+```python
+# Only re-indexes if content hash differs
+index_file_if_changed(file_path, project_path)
+
+# Hash stored in FileHash model
+# Saves time on large codebases
+```
+
+### Parse Tree Caching
+
+Repeated parses hit the cache:
+```python
+# Configure cache size
+DAEM0NMCP_PARSE_TREE_CACHE_MAXSIZE=200
+
+# Check cache performance
+health()  # Returns cache_stats
+```
+
+### Enhanced Health Insights
+
+```python
+health()
+# Now returns:
+#   code_entities_count: Total indexed entities
+#   entities_by_type: Breakdown by class/function/etc
+#   last_indexed_at: When index was last updated
+#   index_stale: True if >24 hours since index
+```
+
 ## Sacred Practices
 
 1. **One sanctum per logical realm** - Even if split across repos
@@ -213,3 +277,5 @@ python -m daem0nmcp.cli remember \
 5. **Verify after consolidation** - Ensure memory counts align
 6. **Awaken the Silent Scribe** - Let the Daem0n capture decisions for you
 7. **Seek condensed visions** - For vast realms, use `condensed=True`
+8. **Tune the search weight** - Adjust hybrid weight for your domain
+9. **Trust the tag inference** - Let the Daem0n classify memories

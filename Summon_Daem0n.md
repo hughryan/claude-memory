@@ -1718,4 +1718,63 @@ Add to startup using the watcher bat file, similar to the HTTP server startup.
 
 ---
 
-*Grimoire of Daem0n v2.13.0: 32 tools for eternal memory with semantic understanding, vector embeddings (Qdrant backend), graph memory (causal chains), memory consolidation (compact_memories), knowledge consumption, refactor guidance, **code understanding layer with multi-language AST parsing (tree-sitter)**, proactive file watcher with multi-channel notifications, complete summoning rituals with wards, Windows Altar of HTTP with automatic Startup enrollment, pre-commit enforcement hooks (mandatory), covenant integration, law generation, the daem0nmcp-protocol skill, **Endless Mode (condensed recall for 50-75% token reduction)**, and **Passive Capture (auto-recall before edits, smart remember suggestions, auto-extract decisions from responses)**.*
+---
+
+## ENHANCED SEARCH & INDEXING (v2.15.0)
+
+*"The Daem0n's sight grows keener with each ascension..."*
+
+### The Keen Eye (Tag Inference)
+
+Tags now infer themselves from memory content. Speak of "fixing a bug" and the `bugfix` tag appears unbidden. Mention "cache" and `perf` manifests.
+
+**Patterns detected:**
+- `fix`, `bug`, `error`, `broken`, `crash` → `bugfix`
+- `todo`, `hack`, `workaround`, `temporary` → `tech-debt`
+- `cache`, `slow`, `fast`, `performance`, `optimize` → `perf`
+- Warning category → `warning` tag automatically
+
+### True Names (Qualified Entities)
+
+Code entities now bear their full lineage: `module.Class.method` instead of mere `method`. Move functions between files - their stable IDs survive the journey, line changes notwithstanding.
+
+```
+find_code("UserService.authenticate", project_path="/path/to/project")
+# Finds the exact method, not just any "authenticate" function
+```
+
+### The Swift Watcher (Incremental Indexing)
+
+Only changed files are re-indexed. SHA256 hashes mark what the Daem0n has seen:
+
+```
+# Auto-indexes only changed files
+python -m daem0nmcp.cli index
+```
+
+### Tuning the Inner Eye
+
+Fine-tune the search through environment variables:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `DAEM0NMCP_HYBRID_VECTOR_WEIGHT` | `0.3` | Balance keyword vs semantic (0.0-1.0) |
+| `DAEM0NMCP_SEARCH_DIVERSITY_MAX_PER_FILE` | `3` | Max results per file |
+| `DAEM0NMCP_PARSE_TREE_CACHE_MAXSIZE` | `200` | Parse tree cache size |
+| `DAEM0NMCP_EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Vector embedding model |
+
+### Enhanced Health Divination
+
+```
+health(project_path="/path/to/project")
+```
+
+Now reveals:
+- `code_entities_count`: Total indexed entities
+- `entities_by_type`: Breakdown by class/function/method
+- `last_indexed_at`: When the index was last refreshed
+- `index_stale`: True if >24 hours since last index
+
+---
+
+*Grimoire of Daem0n v2.15.0: 42 tools for eternal memory with semantic understanding, vector embeddings (Qdrant backend), graph memory (causal chains), memory consolidation (compact_memories), knowledge consumption, refactor guidance, **code understanding layer with multi-language AST parsing (tree-sitter)**, proactive file watcher with multi-channel notifications, complete summoning rituals with wards, Windows Altar of HTTP with automatic Startup enrollment, pre-commit enforcement hooks (mandatory), covenant integration, law generation, the daem0nmcp-protocol skill, **Endless Mode (condensed recall for 50-75% token reduction)**, **Passive Capture (auto-recall before edits, smart remember suggestions, auto-extract decisions from responses)**, and **Enhanced Search & Indexing (tag inference, qualified names, incremental indexing, parse tree caching)**.*

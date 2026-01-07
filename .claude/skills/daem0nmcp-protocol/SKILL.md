@@ -24,6 +24,9 @@ Look for these tools in your available tools:
 - mcp__daem0nmcp__link_memories
 - mcp__daem0nmcp__trace_chain
 - mcp__daem0nmcp__get_graph
+- mcp__daem0nmcp__find_code
+- mcp__daem0nmcp__analyze_impact
+- mcp__daem0nmcp__index_project
 ```
 
 **If tools are NOT available:** This skill does not apply. Proceed normally.
@@ -275,6 +278,67 @@ If the project uses OpenSpec (spec-driven development), the `openspec-daem0n-bri
 **After archiving changes:** Use "record outcome for [change-id]" to convert completed work to learnings.
 
 See the `openspec-daem0n-bridge` skill for full workflow details.
+
+## Enhanced Search & Indexing (v2.15.0)
+
+### Automatic Tag Inference
+
+Memories now auto-detect tags from content:
+- **bugfix**: fix, bug, error, issue, broken, crash
+- **tech-debt**: todo, hack, workaround, temporary
+- **perf**: cache, performance, slow, fast, optimize
+- **warning**: Added automatically for warning category
+
+You don't need to manually tag common patterns.
+
+### Condensed Mode for Large Projects
+
+For projects with many memories, use condensed recall:
+
+```
+mcp__daem0nmcp__recall(topic="authentication", condensed=True)
+```
+
+Returns compressed output (~75% token reduction):
+- Content truncated to 150 chars
+- Rationale/context stripped
+- Ideal for broad surveys before deep dives
+
+### Code Intelligence Tools
+
+**Index your codebase:**
+```
+mcp__daem0nmcp__index_project()  # Index all code entities
+```
+
+**Search code semantically:**
+```
+mcp__daem0nmcp__find_code(query="user authentication")
+```
+
+**Analyze change impact:**
+```
+mcp__daem0nmcp__analyze_impact(entity_name="UserService.authenticate")
+```
+
+### Incremental Indexing
+
+Only re-indexes changed files:
+- Uses SHA256 content hashes
+- Automatically skips unchanged files
+- Entities have stable IDs (survive line changes)
+
+### Enhanced Health Monitoring
+
+```
+mcp__daem0nmcp__health()
+```
+
+Now returns:
+- `code_entities_count`: Total indexed entities
+- `entities_by_type`: Breakdown by class/function
+- `last_indexed_at`: When index was last updated
+- `index_stale`: True if >24 hours since last index
 
 ## The Bottom Line
 

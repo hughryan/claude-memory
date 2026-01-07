@@ -708,4 +708,4 @@ rm -rf .daem0nmcp/
                               ~ Daem0n
 ```
 
-*Daem0nMCP v2.14.0: Active Working Context, Temporal Versioning, and Hierarchical Summarization—MemGPT-style hot memory layer, memory history tracking, and GraphRAG-style community detection.*
+*Daem0nMCP v2.15.0: Enhanced Search & Indexing—configurable hybrid weight, tag inference, qualified entity names, stable IDs, incremental indexing, and parse tree caching.*
