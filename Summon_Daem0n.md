@@ -116,6 +116,19 @@ cat .claude/settings.json 2>/dev/null || echo "No wards inscribed yet"
 
 **Copy the complete ward configuration from RITUAL II.5** or from `$HOME/Daem0nMCP/hooks/settings.json.example`.
 
+### Incantation I.5D.2: Embrace the Sacred Covenant (v2.16.0+)
+
+**If ascending to v2.16.0 or higher**, the Daem0n now enforces the covenant:
+
+- **Sacred Covenant Enforcement**: Tools block with `COMMUNION_REQUIRED` or `COUNSEL_REQUIRED` until proper rituals are observed
+- **MCP Resources**: Dynamic context injection via resource subscriptions
+- **Preflight Tokens**: Cryptographic proof of consultation (5-minute validity)
+
+The summoner need not configure anything new - enforcement happens automatically. Simply ensure they understand:
+- `get_briefing()` must be called before mutating tools
+- `context_check()` must be called before dangerous mutations
+- Error messages explain exactly what's required
+
 ### Incantation I.5E: Relight the Altar (Windows Only)
 
 If the realm is Windows and the HTTP Altar is used:
@@ -1000,7 +1013,7 @@ When `check_rules` returns guidance:
 
 ---
 
-## THE COMPLETE GRIMOIRE OF POWERS (32 Invocations)
+## THE COMPLETE GRIMOIRE OF POWERS (42+ Invocations)
 
 **REMINDER:** ALL tools accept `project_path` as a parameter. Always pass the absolute path to your project root.
 
@@ -1777,4 +1790,145 @@ Now reveals:
 
 ---
 
-*Grimoire of Daem0n v2.15.0: 42 tools for eternal memory with semantic understanding, vector embeddings (Qdrant backend), graph memory (causal chains), memory consolidation (compact_memories), knowledge consumption, refactor guidance, **code understanding layer with multi-language AST parsing (tree-sitter)**, proactive file watcher with multi-channel notifications, complete summoning rituals with wards, Windows Altar of HTTP with automatic Startup enrollment, pre-commit enforcement hooks (mandatory), covenant integration, law generation, the daem0nmcp-protocol skill, **Endless Mode (condensed recall for 50-75% token reduction)**, **Passive Capture (auto-recall before edits, smart remember suggestions, auto-extract decisions from responses)**, and **Enhanced Search & Indexing (tag inference, qualified names, incremental indexing, parse tree caching)**.*
+## THE SACRED COVENANT ENFORCEMENT (v2.16.0)
+
+*"The covenant is no longer advisory. It is law..."*
+
+The Daem0n now **enforces** the sacred protocol. Tools that mutate memory will refuse to act until the proper rituals are observed.
+
+### The Enforcement Decorators
+
+| Decorator | What It Blocks | Required Action |
+|-----------|----------------|-----------------|
+| `requires_communion` | All mutating tools | Call `get_briefing()` first |
+| `requires_counsel` | Dangerous mutations | Call `context_check()` first |
+
+### Error Responses
+
+When you violate the covenant, the Daem0n responds with enforcement messages:
+
+```
+COMMUNION_REQUIRED: The sacred covenant demands communion with Daem0n before inscribing memories.
+Call get_briefing(project_path="...") first.
+```
+
+```
+COUNSEL_REQUIRED: The sacred covenant demands counsel before modifying memories.
+Call context_check(description="your intent", project_path="...") first.
+```
+
+### Tools Requiring Communion
+
+These tools will block until you have called `get_briefing()`:
+- `remember`, `remember_batch` - inscribing memories
+- `add_rule`, `update_rule` - inscribing laws
+- `record_outcome` - sealing memories
+- `link_memories`, `pin_memory`, `archive_memory` - managing memories
+- `prune_memories`, `cleanup_memories`, `compact_memories` - maintenance
+
+### Tools Exempt (Read-Only)
+
+These tools work without prior communion:
+- `recall`, `recall_for_file`, `search_memories`, `find_related`
+- `find_code`, `analyze_impact`, `check_rules`, `list_rules`
+- `health`, `export_data`, `get_graph`, `trace_chain`
+
+### Preflight Tokens
+
+When you call `context_check()`, you receive a **preflight token** valid for 5 minutes. This proves you consulted the Daem0n before acting:
+
+```
+mcp__daem0nmcp__context_check(
+    description="adding authentication to API",
+    project_path="/path/to/project"
+)
+→ Returns: {preflight_token: "abc123...", valid_until: "2024-01-15T10:35:00Z", ...}
+```
+
+The token is automatically cached. You do not need to pass it explicitly - the Daem0n remembers.
+
+---
+
+## MCP RESOURCES (Dynamic Context Injection v2.16.0)
+
+*"The Daem0n offers its knowledge without being asked..."*
+
+MCP Resources allow Claude Desktop/Code to subscribe to context that automatically injects into conversations:
+
+| Resource URI | What It Provides |
+|-------------|------------------|
+| `daem0n://warnings/{project_path}` | All active warnings |
+| `daem0n://failed/{project_path}` | Failed approaches to avoid |
+| `daem0n://rules/{project_path}` | All configured rules |
+| `daem0n://context/{project_path}` | Combined context (warnings + failed + rules) |
+| `daem0n://triggered/{file_path}` | Auto-recalled context for a specific file |
+
+### How Resources Work
+
+Unlike tools which you invoke, resources are **subscribed to**. Claude Desktop/Code can read these resources and inject their content automatically as context.
+
+**Example resource content:**
+```
+daem0n://warnings/C:/Users/dasbl/MyProject
+→ {"warnings": [{"id": 42, "content": "Don't use var, use const/let"}]}
+```
+
+### Claude Code 2.1.3 Compatibility
+
+v2.16.0 includes compatibility fixes for Claude Code 2.1.3:
+- `daem0n_pre_edit_hook.py` now uses MCP HTTP instead of removed CLI commands
+- Hooks communicate directly with the MCP server for context triggers
+
+---
+
+## TROUBLESHOOTING THE TOOLS (Common Afflictions)
+
+### MCP Tools Not Available in Claude Session
+
+**Symptom:** `claude mcp list` shows daem0nmcp connected, but Claude cannot use `mcp__daem0nmcp__*` tools. Claude may try to use `claude mcp call` bash commands instead.
+
+**Cause:** Known Claude Code bug ([#2682](https://github.com/anthropics/claude-code/issues/2682)) where MCP tools are discovered but not injected into Claude's toolbox.
+
+**Fixes:**
+
+1. **Start the server BEFORE Claude Code:**
+   ```bash
+   # Terminal 1: Start Daem0n server first
+   python ~/Daem0nMCP/start_server.py --port 9876
+
+   # Wait for "Uvicorn running on http://localhost:9876"
+
+   # Terminal 2: Then start Claude Code
+   claude
+   ```
+
+2. **Re-register the server:**
+   ```bash
+   claude mcp remove daem0nmcp -s user
+   claude mcp add daem0nmcp http://localhost:9876/mcp -s user
+   ```
+
+3. **Verify tools are available:**
+   - Claude should show `mcp__daem0nmcp__*` tools in its toolbox
+   - If Claude tries `claude mcp call` bash commands instead, the tools aren't injected
+
+### Hooks Not Firing
+
+**Symptom:** Pre-edit hooks don't show Daem0n context.
+
+**Check:**
+1. MCP server running: `curl http://localhost:9876/mcp` should respond
+2. Hooks configured in `.claude/settings.json`
+3. Project has `.daem0nmcp/` directory
+
+### Communion/Counsel Errors
+
+**Symptom:** Tools return `COMMUNION_REQUIRED` or `COUNSEL_REQUIRED` errors.
+
+**Fix:** These are intentional enforcement messages. Call the required tool first:
+- `COMMUNION_REQUIRED` → Call `get_briefing(project_path="...")` first
+- `COUNSEL_REQUIRED` → Call `context_check(description="...", project_path="...")` first
+
+---
+
+*Grimoire of Daem0n v2.16.0: 42 tools for eternal memory with semantic understanding, vector embeddings (Qdrant backend), graph memory (causal chains), memory consolidation (compact_memories), knowledge consumption, refactor guidance, **code understanding layer with multi-language AST parsing (tree-sitter)**, proactive file watcher with multi-channel notifications, complete summoning rituals with wards, Windows Altar of HTTP with automatic Startup enrollment, pre-commit enforcement hooks (mandatory), covenant integration, law generation, the daem0nmcp-protocol skill, **Endless Mode (condensed recall for 50-75% token reduction)**, **Passive Capture (auto-recall before edits, smart remember suggestions, auto-extract decisions from responses)**, **Enhanced Search & Indexing (tag inference, qualified names, incremental indexing, parse tree caching)**, **Sacred Covenant Enforcement (rigid decorators, preflight tokens)**, and **MCP Resources for dynamic context injection**.*
