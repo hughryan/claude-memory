@@ -1,13 +1,13 @@
 """
-Sacred Covenant Enforcement for ClaudeMemory.
+Protocol Enforcement for ClaudeMemory.
 
-Implements rigid enforcement decorators for the Sacred Covenant:
-- requires_communion: Blocks tools until get_briefing() called
-- requires_counsel: Blocks mutating tools until context_check() called
+Implements rigid enforcement decorators for the Protocol:
+- requires_init: Blocks tools until get_briefing() called
+- requires_context_check: Blocks mutating tools until context_check() called
 - PreflightToken: Cryptographic proof of consultation
 
-The Sacred Covenant flow is:
-    COMMUNE (get_briefing) -> SEEK COUNSEL (context_check) -> INSCRIBE (remember) -> SEAL (record_outcome)
+The Protocol flow is:
+    INIT (get_briefing) -> CHECK CONTEXT (context_check) -> RECORD (remember) -> TRACK OUTCOME (record_outcome)
 """
 
 import hashlib
@@ -23,7 +23,7 @@ from typing import Any, Callable, Dict, Optional, Set
 logger = logging.getLogger(__name__)
 
 # TTL for context checks (5 minutes default)
-COUNSEL_TTL_SECONDS = 300
+CONTEXT_CHECK_TTL_SECONDS = 300
 
 # Token secret from environment (falls back to a default for testing)
 _TOKEN_SECRET = os.environ.get("CLAUDE_MEMORY_TOKEN_SECRET", "claude-memory-protocol-default-secret")
@@ -33,11 +33,11 @@ _TOKEN_SECRET = os.environ.get("CLAUDE_MEMORY_TOKEN_SECRET", "claude-memory-prot
 # TOOL CLASSIFICATION
 # ============================================================================
 
-# Tools exempt from all covenant enforcement (entry points and diagnostics)
-COVENANT_EXEMPT_TOOLS: Set[str] = {
-    "get_briefing",      # Entry point - starts communion
+# Tools exempt from all protocol enforcement (entry points and diagnostics)
+PROTOCOL_EXEMPT_TOOLS: Set[str] = {
+    "get_briefing",      # Entry point - starts initialization
     "health",            # Diagnostic - always available
-    "context_check",     # Part of the covenant flow
+    "context_check",     # Part of the protocol flow
     "recall",            # Read-only query
     "recall_for_file",   # Read-only query
     "search_memories",   # Read-only query
@@ -53,8 +53,8 @@ COVENANT_EXEMPT_TOOLS: Set[str] = {
     "trace_chain",       # Read-only query
 }
 
-# Tools that REQUIRE communion (must call get_briefing first)
-COMMUNION_REQUIRED_TOOLS: Set[str] = {
+# Tools that REQUIRE initialization (must call get_briefing first)
+INIT_REQUIRED_TOOLS: Set[str] = {
     "remember",
     "remember_batch",
     "add_rule",
@@ -73,8 +73,8 @@ COMMUNION_REQUIRED_TOOLS: Set[str] = {
     "ingest_doc",
 }
 
-# Tools that REQUIRE counsel (must call context_check before mutating)
-COUNSEL_REQUIRED_TOOLS: Set[str] = {
+# Tools that REQUIRE context check (must call context_check before mutating)
+CONTEXT_CHECK_REQUIRED_TOOLS: Set[str] = {
     "remember",
     "remember_batch",
     "add_rule",
@@ -88,56 +88,56 @@ COUNSEL_REQUIRED_TOOLS: Set[str] = {
 
 
 # ============================================================================
-# COVENANT VIOLATION RESPONSES
+# PROTOCOL VIOLATION RESPONSES
 # ============================================================================
 
-class CovenantViolation:
+class ProtocolViolation:
     """
     Standard violation response structures.
 
     Returns structured dicts that block tool execution and guide
-    the AI toward proper covenant adherence.
+    the AI toward proper protocol adherence.
     """
 
     @staticmethod
-    def communion_required(project_path: str) -> Dict[str, Any]:
+    def init_required(project_path: str) -> Dict[str, Any]:
         """
         Response when tool is called without prior get_briefing().
 
-        The Sacred Covenant demands communion before any meaningful work.
+        The Protocol requires initialization before any meaningful work.
         """
         return {
             "status": "blocked",
-            "violation": "COMMUNION_REQUIRED",
+            "violation": "INIT_REQUIRED",
             "message": (
-                "The Sacred Covenant demands communion before work begins. "
-                "You must first call get_briefing() to commune with the memory system "
-                "and receive context about this realm's memories, warnings, and rules."
+                "The Protocol requires initialization before work begins. "
+                "You must first call get_briefing() to initialize the memory system "
+                "and receive context about this project's memories, warnings, and rules."
             ),
             "project_path": project_path,
             "remedy": {
                 "tool": "get_briefing",
                 "args": {"project_path": project_path},
-                "description": "Begin communion with the memory system",
+                "description": "Initialize the memory system",
             },
         }
 
     @staticmethod
-    def counsel_required(tool_name: str, project_path: str) -> Dict[str, Any]:
+    def context_check_required(tool_name: str, project_path: str) -> Dict[str, Any]:
         """
         Response when mutating tool is called without prior context_check().
 
-        Before inscribing new memories, one must seek counsel on what
+        Before recording new memories, one must check context on what
         already exists to avoid contradictions and duplications.
         """
         return {
             "status": "blocked",
-            "violation": "COUNSEL_REQUIRED",
+            "violation": "CONTEXT_CHECK_REQUIRED",
             "message": (
-                f"The Sacred Covenant requires seeking counsel before using '{tool_name}'. "
+                f"The Protocol requires checking context before using '{tool_name}'. "
                 f"You must first call context_check() to understand existing memories "
                 f"and rules related to your intended action. This prevents contradictions "
-                f"and honors the wisdom already inscribed."
+                f"and respects existing knowledge."
             ),
             "project_path": project_path,
             "tool_blocked": tool_name,
@@ -147,31 +147,31 @@ class CovenantViolation:
                     "description": f"About to use {tool_name}",
                     "project_path": project_path,
                 },
-                "description": f"Seek counsel before {tool_name}",
+                "description": f"Check context before {tool_name}",
             },
         }
 
     @staticmethod
-    def counsel_expired(tool_name: str, project_path: str, age_seconds: int) -> Dict[str, Any]:
+    def context_check_expired(tool_name: str, project_path: str, age_seconds: int) -> Dict[str, Any]:
         """
         Response when context_check was done but has expired.
         """
         return {
             "status": "blocked",
-            "violation": "COUNSEL_EXPIRED",
+            "violation": "CONTEXT_CHECK_EXPIRED",
             "message": (
-                f"Your counsel has grown stale ({age_seconds}s old, limit is {COUNSEL_TTL_SECONDS}s). "
-                f"The context may have changed. Please seek fresh counsel before '{tool_name}'."
+                f"Your context check has expired ({age_seconds}s old, limit is {CONTEXT_CHECK_TTL_SECONDS}s). "
+                f"The context may have changed. Please run a fresh context check before '{tool_name}'."
             ),
             "project_path": project_path,
             "tool_blocked": tool_name,
             "remedy": {
                 "tool": "context_check",
                 "args": {
-                    "description": f"Refreshing counsel before {tool_name}",
+                    "description": f"Refreshing context before {tool_name}",
                     "project_path": project_path,
                 },
-                "description": "Seek fresh counsel",
+                "description": "Run fresh context check",
             },
         }
 
@@ -209,7 +209,7 @@ class PreflightToken:
         action: str,
         session_id: str,
         project_path: str,
-        ttl_seconds: int = COUNSEL_TTL_SECONDS,
+        ttl_seconds: int = CONTEXT_CHECK_TTL_SECONDS,
     ) -> "PreflightToken":
         """
         Issue a new preflight token after context_check.
@@ -305,26 +305,26 @@ class PreflightToken:
 
 
 # ============================================================================
-# COVENANT ENFORCER
+# PROTOCOL ENFORCER
 # ============================================================================
 
-class CovenantEnforcer:
+class ProtocolEnforcer:
     """
-    Enforces the Sacred Covenant for MCP tool calls.
+    Enforces the Protocol for MCP tool calls.
 
     The enforcer checks session state to ensure:
-    1. Communion (get_briefing) was performed before work
-    2. Counsel (context_check) was sought before mutations
+    1. Initialization (get_briefing) was performed before work
+    2. Context check (context_check) was done before mutations
 
     Usage:
-        enforcer = CovenantEnforcer()
+        enforcer = ProtocolEnforcer()
 
         # In tool implementation:
-        violation = await enforcer.check_communion(project_path)
+        violation = await enforcer.check_init(project_path)
         if violation:
             return violation
 
-        violation = await enforcer.check_counsel("remember", project_path)
+        violation = await enforcer.check_context(tool_name, project_path)
         if violation:
             return violation
     """
@@ -350,55 +350,55 @@ class CovenantEnforcer:
             return None
         return await self._session_manager.get_session_state(project_path)
 
-    async def check_communion(self, project_path: str) -> Optional[Dict[str, Any]]:
+    async def check_init(self, project_path: str) -> Optional[Dict[str, Any]]:
         """
-        Check if communion (get_briefing) was performed.
+        Check if initialization (get_briefing) was performed.
 
         Args:
             project_path: Project to check
 
         Returns:
-            None if communion complete, violation dict if not
+            None if initialization complete, violation dict if not
         """
         state = await self._get_session_state(project_path)
 
         if state is None or not state.get("briefed", False):
-            logger.info(f"Communion required for project: {project_path}")
-            return CovenantViolation.communion_required(project_path)
+            logger.info(f"Initialization required for project: {project_path}")
+            return ProtocolViolation.init_required(project_path)
 
-        return None  # Communion complete
+        return None  # Initialization complete
 
-    async def check_counsel(
+    async def check_context(
         self,
         tool_name: str,
         project_path: str,
-        ttl_seconds: int = COUNSEL_TTL_SECONDS,
+        ttl_seconds: int = CONTEXT_CHECK_TTL_SECONDS,
     ) -> Optional[Dict[str, Any]]:
         """
-        Check if counsel (context_check) was sought recently.
+        Check if context check (context_check) was done recently.
 
         Args:
             tool_name: Name of the tool being called
             project_path: Project to check
-            ttl_seconds: How old the counsel can be
+            ttl_seconds: How old the context check can be
 
         Returns:
-            None if counsel is fresh, violation dict if not
+            None if context check is fresh, violation dict if not
         """
-        # First check communion
-        communion_violation = await self.check_communion(project_path)
-        if communion_violation:
-            return communion_violation
+        # First check initialization
+        init_violation = await self.check_init(project_path)
+        if init_violation:
+            return init_violation
 
         state = await self._get_session_state(project_path)
         if state is None:
-            return CovenantViolation.counsel_required(tool_name, project_path)
+            return ProtocolViolation.context_check_required(tool_name, project_path)
 
         context_checks = state.get("context_checks", [])
 
         if not context_checks:
-            logger.info(f"Counsel required before {tool_name} for project: {project_path}")
-            return CovenantViolation.counsel_required(tool_name, project_path)
+            logger.info(f"Context check required before {tool_name} for project: {project_path}")
+            return ProtocolViolation.context_check_required(tool_name, project_path)
 
         # Find the most recent context check
         now = datetime.now(timezone.utc)
@@ -426,14 +426,14 @@ class CovenantEnforcer:
             # No valid timestamped checks found, but we have legacy checks
             if context_checks:
                 return None  # Allow through for backwards compatibility
-            return CovenantViolation.counsel_required(tool_name, project_path)
+            return ProtocolViolation.context_check_required(tool_name, project_path)
 
-        # Check if the most recent counsel is still fresh
+        # Check if the most recent context check is still fresh
         if most_recent_age > ttl_seconds:
-            logger.info(f"Counsel expired ({most_recent_age:.0f}s old) for {tool_name}")
-            return CovenantViolation.counsel_expired(tool_name, project_path, int(most_recent_age))
+            logger.info(f"Context check expired ({most_recent_age:.0f}s old) for {tool_name}")
+            return ProtocolViolation.context_check_expired(tool_name, project_path, int(most_recent_age))
 
-        return None  # Counsel is fresh
+        return None  # Context check is fresh
 
 
 # ============================================================================
@@ -473,12 +473,12 @@ def _get_context_state(project_path: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def requires_communion(func: Callable) -> Callable:
+def requires_init(func: Callable) -> Callable:
     """
-    Decorator that enforces communion (get_briefing) before tool execution.
+    Decorator that enforces initialization (get_briefing) before tool execution.
 
     Usage:
-        @requires_communion
+        @requires_init
         async def remember(content: str, project_path: str, ...):
             ...
     """
@@ -493,28 +493,28 @@ def requires_communion(func: Callable) -> Callable:
 
         if project_path is None:
             # Can't enforce without project_path
-            logger.warning(f"Cannot enforce communion for {func.__name__}: no project_path")
+            logger.warning(f"Cannot enforce initialization for {func.__name__}: no project_path")
             return await func(*args, **kwargs)
 
         # Check state via callback
         state = _get_context_state(project_path)
         if state is None or not state.get("briefed", False):
-            logger.info(f"Communion required for {func.__name__}")
-            return CovenantViolation.communion_required(project_path)
+            logger.info(f"Initialization required for {func.__name__}")
+            return ProtocolViolation.init_required(project_path)
 
         return await func(*args, **kwargs)
 
     return wrapper
 
 
-def requires_counsel(func: Callable) -> Callable:
+def requires_context_check(func: Callable) -> Callable:
     """
-    Decorator that enforces counsel (context_check) before tool execution.
+    Decorator that enforces context check (context_check) before tool execution.
 
-    This also implicitly enforces communion.
+    This also implicitly enforces initialization.
 
     Usage:
-        @requires_counsel
+        @requires_context_check
         async def remember(content: str, project_path: str, ...):
             ...
     """
@@ -528,24 +528,24 @@ def requires_counsel(func: Callable) -> Callable:
 
         if project_path is None:
             # Can't enforce without project_path
-            logger.warning(f"Cannot enforce counsel for {func.__name__}: no project_path")
+            logger.warning(f"Cannot enforce context check for {func.__name__}: no project_path")
             return await func(*args, **kwargs)
 
         # Check state via callback
         state = _get_context_state(project_path)
 
-        # First check communion
+        # First check initialization
         if state is None or not state.get("briefed", False):
-            logger.info(f"Communion required before {func.__name__}")
-            return CovenantViolation.communion_required(project_path)
+            logger.info(f"Initialization required before {func.__name__}")
+            return ProtocolViolation.init_required(project_path)
 
-        # Then check counsel
+        # Then check context
         context_checks = state.get("context_checks", [])
         if not context_checks:
-            logger.info(f"Counsel required before {func.__name__}")
-            return CovenantViolation.counsel_required(func.__name__, project_path)
+            logger.info(f"Context check required before {func.__name__}")
+            return ProtocolViolation.context_check_required(func.__name__, project_path)
 
-        # Check if the most recent counsel is still fresh
+        # Check if the most recent context check is still fresh
         now = datetime.now(timezone.utc)
         most_recent_age = None
 
@@ -563,12 +563,12 @@ def requires_counsel(func: Callable) -> Callable:
 
         if most_recent_age is None:
             # No valid timestamped checks
-            logger.info(f"Counsel required (no valid checks) before {func.__name__}")
-            return CovenantViolation.counsel_required(func.__name__, project_path)
+            logger.info(f"Context check required (no valid checks) before {func.__name__}")
+            return ProtocolViolation.context_check_required(func.__name__, project_path)
 
-        if most_recent_age > COUNSEL_TTL_SECONDS:
-            logger.info(f"Counsel expired ({most_recent_age:.0f}s old) for {func.__name__}")
-            return CovenantViolation.counsel_expired(func.__name__, project_path, int(most_recent_age))
+        if most_recent_age > CONTEXT_CHECK_TTL_SECONDS:
+            logger.info(f"Context check expired ({most_recent_age:.0f}s old) for {func.__name__}")
+            return ProtocolViolation.context_check_expired(func.__name__, project_path, int(most_recent_age))
 
         return await func(*args, **kwargs)
 

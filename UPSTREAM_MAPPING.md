@@ -33,6 +33,39 @@ This file documents all naming changes to facilitate merging upstream changes fr
 | `Banish_Daem0n.md` | `Uninstall.md` |
 | `docs/openspec-daem0n-integration.md` | `docs/openspec-integration.md` |
 | `start_daem0nmcp_server.bat` | `start_claude_memory_server.bat` |
+| `daem0nmcp/covenant.py` | `claude_memory/protocol.py` |
+| `tests/test_covenant.py` | `tests/test_protocol.py` |
+| `tests/test_covenant_integration.py` | `tests/test_protocol_integration.py` |
+| `tests/test_full_covenant_flow.py` | `tests/test_full_protocol_flow.py` |
+
+## Code Identifier Renames
+
+| Upstream | Fork |
+|----------|------|
+| `CovenantEnforcer` | `ProtocolEnforcer` |
+| `CovenantViolation` | `ProtocolViolation` |
+| `COVENANT_EXEMPT_TOOLS` | `PROTOCOL_EXEMPT_TOOLS` |
+| `COMMUNION_REQUIRED_TOOLS` | `INIT_REQUIRED_TOOLS` |
+| `COUNSEL_REQUIRED_TOOLS` | `CONTEXT_CHECK_REQUIRED_TOOLS` |
+| `COUNSEL_TTL_SECONDS` | `CONTEXT_CHECK_TTL_SECONDS` |
+| `requires_communion` | `requires_init` |
+| `requires_counsel` | `requires_context_check` |
+| `communion_required()` | `init_required()` |
+| `counsel_required()` | `context_check_required()` |
+| `counsel_expired()` | `context_check_expired()` |
+| `check_communion()` | `check_init()` |
+| `check_counsel()` | `check_context()` |
+| `ensure_covenant_compliance()` | `ensure_protocol_compliance()` |
+| `covenant_compliant_project` | `protocol_compliant_project` |
+| `_get_context_for_covenant()` | `_get_context_for_protocol()` |
+
+## Violation Response Codes
+
+| Upstream | Fork |
+|----------|------|
+| `COMMUNION_REQUIRED` | `INIT_REQUIRED` |
+| `COUNSEL_REQUIRED` | `CONTEXT_CHECK_REQUIRED` |
+| `COUNSEL_EXPIRED` | `CONTEXT_CHECK_EXPIRED` |
 
 ## Themed Language Replacements
 

@@ -81,32 +81,36 @@ def tmp_path(tmp_path_factory):
     shutil.rmtree(path, ignore_errors=True)
 
 
-async def ensure_covenant_compliance(project_path: str):
+async def ensure_protocol_compliance(project_path: str):
     """
-    Helper to ensure covenant compliance for tests.
+    Helper to ensure protocol compliance for tests.
 
-    Calls get_briefing() and context_check() to satisfy the Sacred Covenant
-    requirements for tools that need communion and/or counsel.
+    Calls get_briefing() and context_check() to satisfy the Protocol
+    requirements for tools that need initialization and/or context check.
     """
     from claude_memory import server
 
-    # Ensure communion (get_briefing)
+    # Ensure initialization (get_briefing)
     await server.get_briefing(project_path=project_path)
 
-    # Ensure counsel (context_check)
+    # Ensure context check (context_check)
     await server.context_check(
         description="Test operation",
         project_path=project_path,
     )
 
 
+# Backwards compatibility alias
+ensure_covenant_compliance = ensure_protocol_compliance
+
+
 @pytest.fixture
-async def covenant_compliant_project(tmp_path):
+async def protocol_compliant_project(tmp_path):
     """
-    Fixture that creates a project and ensures covenant compliance.
+    Fixture that creates a project and ensures protocol compliance.
 
     Returns the project path that can be used with tools requiring
-    communion and/or counsel.
+    initialization and/or context check.
     """
     from claude_memory.database import DatabaseManager
     from claude_memory import server
@@ -121,10 +125,14 @@ async def covenant_compliant_project(tmp_path):
     # Clear any cached contexts
     server._project_contexts.clear()
 
-    # Ensure covenant compliance
-    await ensure_covenant_compliance(project_path)
+    # Ensure protocol compliance
+    await ensure_protocol_compliance(project_path)
 
     yield project_path
 
     # Cleanup
     await db_manager.close()
+
+
+# Backwards compatibility alias
+covenant_compliant_project = protocol_compliant_project
