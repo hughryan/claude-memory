@@ -86,7 +86,7 @@ try:
     from . import __version__
     from . import vectors
     from .logging_config import StructuredFormatter, with_request_id, request_id_var, set_release_callback
-    from .covenant import requires_communion, requires_counsel, set_context_callback
+    from .protocol import requires_init, requires_context_check, set_context_callback
 except ImportError:
     # For fastmcp run which executes server.py directly
     from claude_memory.config import settings
@@ -97,7 +97,7 @@ except ImportError:
     from claude_memory import __version__
     from claude_memory import vectors
     from claude_memory.logging_config import StructuredFormatter, with_request_id, request_id_var, set_release_callback
-    from claude_memory.covenant import requires_communion, requires_counsel, set_context_callback
+    from claude_memory.protocol import requires_init, requires_context_check, set_context_callback
 from sqlalchemy import select, delete, or_, func
 from dataclasses import dataclass, field
 
@@ -135,7 +135,7 @@ class ProjectContext:
     last_accessed: float = 0.0  # For LRU tracking
     active_requests: int = 0  # Prevent eviction while in use
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    # Covenant state tracking
+    # Protocol state tracking
     briefed: bool = False  # True after get_briefing called
     context_checks: List[Dict[str, Any]] = field(default_factory=list)  # Timestamped context checks
 
@@ -153,11 +153,11 @@ _EVICTION_INTERVAL_SECONDS: float = 60.0
 _default_project_path: Optional[str] = os.environ.get('CLAUDE_MEMORY_PROJECT_ROOT')
 
 
-def _get_context_for_covenant(project_path: str) -> Optional[ProjectContext]:
+def _get_context_for_protocol(project_path: str) -> Optional[ProjectContext]:
     """
-    Get a project context for covenant enforcement.
+    Get a project context for protocol enforcement.
 
-    This is called by the covenant decorators to check session state.
+    This is called by the protocol decorators to check session state.
     """
     try:
         normalized = str(Path(project_path).resolve())
@@ -166,8 +166,8 @@ def _get_context_for_covenant(project_path: str) -> Optional[ProjectContext]:
         return None
 
 
-# Register the callback for covenant enforcement
-set_context_callback(_get_context_for_covenant)
+# Register the callback for protocol enforcement
+set_context_callback(_get_context_for_protocol)
 
 
 def _missing_project_path_error() -> Dict[str, Any]:
@@ -504,7 +504,7 @@ logger.info(f"ClaudeMemory Server initialized (default storage: {storage_path})"
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_counsel
+@requires_context_check
 async def remember(
     category: str,
     content: str,
@@ -548,7 +548,7 @@ async def remember(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_counsel
+@requires_context_check
 async def remember_batch(
     memories: List[Dict[str, Any]],
     project_path: Optional[str] = None
@@ -592,7 +592,7 @@ async def remember_batch(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def recall(
     topic: str,
     categories: Optional[List[str]] = None,
@@ -660,7 +660,7 @@ async def recall(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_counsel
+@requires_context_check
 async def add_rule(
     trigger: str,
     must_do: Optional[List[str]] = None,
@@ -702,7 +702,7 @@ async def add_rule(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def check_rules(
     action: str,
     context: Optional[Dict[str, Any]] = None,
@@ -729,7 +729,7 @@ async def check_rules(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def record_outcome(
     memory_id: int,
     outcome: str,
@@ -1717,7 +1717,7 @@ async def get_briefing(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def search_memories(
     query: str,
     limit: int = 20,
@@ -1782,7 +1782,7 @@ async def search_memories(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def list_rules(
     enabled_only: bool = True,
     limit: int = 50,
@@ -1809,7 +1809,7 @@ async def list_rules(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_counsel
+@requires_context_check
 async def update_rule(
     rule_id: int,
     must_do: Optional[List[str]] = None,
@@ -1851,7 +1851,7 @@ async def update_rule(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def find_related(
     memory_id: int,
     limit: int = 5,
@@ -1878,7 +1878,7 @@ async def find_related(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def context_check(
     description: str,
     project_path: Optional[str] = None
@@ -1942,7 +1942,7 @@ async def context_check(
     })
 
     # Issue preflight token as proof of consultation
-    from .covenant import PreflightToken
+    from .protocol import PreflightToken
     from .enforcement import get_session_id
 
     token = PreflightToken.issue(
@@ -1973,7 +1973,7 @@ async def context_check(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def recall_for_file(
     file_path: str,
     limit: int = 10,
@@ -2129,7 +2129,7 @@ def _scan_for_todos(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def scan_todos(
     path: Optional[str] = None,
     auto_remember: bool = False,
@@ -2474,7 +2474,7 @@ def _chunk_markdown_content(content: str, chunk_size: int, max_chunks: int) -> L
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_counsel
+@requires_context_check
 async def ingest_doc(
     url: str,
     topic: str,
@@ -2567,7 +2567,7 @@ async def ingest_doc(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def propose_refactor(
     file_path: str,
     project_path: Optional[str] = None
@@ -2703,7 +2703,7 @@ async def propose_refactor(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def rebuild_index(
     project_path: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -2731,7 +2731,7 @@ async def rebuild_index(
 
 @mcp.tool()
 @with_request_id
-@requires_counsel
+@requires_context_check
 async def export_data(
     project_path: Optional[str] = None,
     include_vectors: bool = False
@@ -2807,7 +2807,7 @@ async def export_data(
 
 @mcp.tool()
 @with_request_id
-@requires_counsel
+@requires_context_check
 async def import_data(
     data: Dict[str, Any],
     project_path: Optional[str] = None,
@@ -2915,7 +2915,7 @@ async def import_data(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def pin_memory(
     memory_id: int,
     pinned: bool = True,
@@ -2960,7 +2960,7 @@ async def pin_memory(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def link_memories(
     source_id: int,
     target_id: int,
@@ -2992,7 +2992,7 @@ async def link_memories(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def unlink_memories(
     source_id: int,
     target_id: int,
@@ -3021,7 +3021,7 @@ async def unlink_memories(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def trace_chain(
     memory_id: int,
     direction: str = "both",
@@ -3053,7 +3053,7 @@ async def trace_chain(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def get_graph(
     memory_ids: Optional[List[int]] = None,
     topic: Optional[str] = None,
@@ -3082,7 +3082,7 @@ async def get_graph(
 
 @mcp.tool()
 @with_request_id
-@requires_counsel
+@requires_context_check
 async def prune_memories(
     older_than_days: int = 90,
     categories: Optional[List[str]] = None,
@@ -3168,7 +3168,7 @@ async def prune_memories(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def archive_memory(
     memory_id: int,
     archived: bool = True,
@@ -3208,7 +3208,7 @@ async def archive_memory(
 
 @mcp.tool()
 @with_request_id
-@requires_counsel
+@requires_context_check
 async def cleanup_memories(
     dry_run: bool = True,
     merge_duplicates: bool = True,
@@ -3329,7 +3329,7 @@ async def cleanup_memories(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_counsel
+@requires_context_check
 async def compact_memories(
     summary: str,
     limit: int = 10,
@@ -3432,7 +3432,7 @@ async def health(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def index_project(
     path: Optional[str] = None,
     patterns: Optional[List[str]] = None,
@@ -3484,7 +3484,7 @@ async def index_project(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def find_code(
     query: str,
     project_path: Optional[str] = None,
@@ -3536,7 +3536,7 @@ async def find_code(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def analyze_impact(
     entity_name: str,
     project_path: Optional[str] = None
@@ -3577,7 +3577,7 @@ async def analyze_impact(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def link_projects(
     linked_path: str,
     relationship: str = "related",
@@ -3614,7 +3614,7 @@ async def link_projects(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def unlink_projects(
     linked_path: str,
     project_path: Optional[str] = None
@@ -3645,7 +3645,7 @@ async def unlink_projects(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def list_linked_projects(
     project_path: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -3672,7 +3672,7 @@ async def list_linked_projects(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def consolidate_linked_databases(
     archive_sources: bool = False,
     project_path: Optional[str] = None
@@ -3707,7 +3707,7 @@ async def consolidate_linked_databases(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def set_active_context(
     memory_id: int,
     reason: Optional[str] = None,
@@ -3751,7 +3751,7 @@ async def set_active_context(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def get_active_context(
     project_path: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -3777,7 +3777,7 @@ async def get_active_context(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def remove_from_active_context(
     memory_id: int,
     project_path: Optional[str] = None
@@ -3805,7 +3805,7 @@ async def remove_from_active_context(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def clear_active_context(
     project_path: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -3836,7 +3836,7 @@ async def clear_active_context(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def get_memory_versions(
     memory_id: int,
     limit: int = 50,
@@ -3865,7 +3865,7 @@ async def get_memory_versions(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def get_memory_at_time(
     memory_id: int,
     timestamp: str,
@@ -3906,7 +3906,7 @@ async def get_memory_at_time(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def rebuild_communities(
     min_community_size: int = 2,
     project_path: Optional[str] = None
@@ -3947,7 +3947,7 @@ async def rebuild_communities(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def list_communities(
     level: Optional[int] = None,
     project_path: Optional[str] = None
@@ -3980,7 +3980,7 @@ async def list_communities(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def get_community_details(
     community_id: int,
     project_path: Optional[str] = None
@@ -4005,7 +4005,7 @@ async def get_community_details(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def recall_hierarchical(
     topic: str,
     include_members: bool = False,
@@ -4039,7 +4039,7 @@ async def recall_hierarchical(
 # ============================================================================
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def recall_by_entity(
     entity_name: str,
     entity_type: Optional[str] = None,
@@ -4074,7 +4074,7 @@ async def recall_by_entity(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def list_entities(
     entity_type: Optional[str] = None,
     limit: int = 20,
@@ -4114,7 +4114,7 @@ async def list_entities(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def backfill_entities(
     project_path: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -4173,7 +4173,7 @@ async def backfill_entities(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def add_context_trigger(
     trigger_type: str,
     pattern: str,
@@ -4218,7 +4218,7 @@ async def add_context_trigger(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def list_context_triggers(
     active_only: bool = True,
     project_path: Optional[str] = None
@@ -4257,7 +4257,7 @@ async def list_context_triggers(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def remove_context_trigger(
     trigger_id: int,
     project_path: Optional[str] = None
@@ -4290,7 +4290,7 @@ async def remove_context_trigger(
 
 @mcp.tool()
 @with_request_id
-@requires_communion
+@requires_init
 async def check_context_triggers(
     file_path: Optional[str] = None,
     tags: Optional[List[str]] = None,

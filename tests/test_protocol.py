@@ -1,35 +1,35 @@
-"""Tests for Sacred Covenant enforcement."""
+"""Tests for Protocol enforcement."""
 
 import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from claude_memory.covenant import (
-    CovenantEnforcer,
-    CovenantViolation,
+from claude_memory.protocol import (
+    ProtocolEnforcer,
+    ProtocolViolation,
     PreflightToken,
-    COVENANT_EXEMPT_TOOLS,
-    COMMUNION_REQUIRED_TOOLS,
-    COUNSEL_REQUIRED_TOOLS,
+    PROTOCOL_EXEMPT_TOOLS,
+    INIT_REQUIRED_TOOLS,
+    CONTEXT_CHECK_REQUIRED_TOOLS,
 )
 
 
-class TestCovenantViolation:
-    """Test the CovenantViolation response structure."""
+class TestProtocolViolation:
+    """Test the ProtocolViolation response structure."""
 
-    def test_communion_required_response(self):
-        """COMMUNION_REQUIRED should include remedy."""
-        response = CovenantViolation.communion_required("test_project")
+    def test_init_required_response(self):
+        """INIT_REQUIRED should include remedy."""
+        response = ProtocolViolation.init_required("test_project")
         assert response["status"] == "blocked"
-        assert response["violation"] == "COMMUNION_REQUIRED"
+        assert response["violation"] == "INIT_REQUIRED"
         assert "remedy" in response
         assert response["remedy"]["tool"] == "get_briefing"
 
-    def test_counsel_required_response(self):
-        """COUNSEL_REQUIRED should include action description."""
-        response = CovenantViolation.counsel_required("remember", "test_project")
+    def test_context_check_required_response(self):
+        """CONTEXT_CHECK_REQUIRED should include action description."""
+        response = ProtocolViolation.context_check_required("remember", "test_project")
         assert response["status"] == "blocked"
-        assert response["violation"] == "COUNSEL_REQUIRED"
+        assert response["violation"] == "CONTEXT_CHECK_REQUIRED"
         assert "remember" in response["message"]
         assert response["remedy"]["tool"] == "context_check"
 
@@ -95,7 +95,7 @@ class TestPreflightToken:
         assert verified is None
 
 
-class TestCovenantEnforcer:
+class TestProtocolEnforcer:
     """Test the enforcement decorators."""
 
     @pytest.fixture
@@ -116,7 +116,7 @@ class TestCovenantEnforcer:
         return mock_session_state
 
     @pytest.fixture
-    def counseled_session_state(self, briefed_session_state):
+    def context_checked_session_state(self, briefed_session_state):
         """Session with context check performed."""
         briefed_session_state["context_checks"] = [
             {"topic": "remember", "timestamp": datetime.now(timezone.utc).isoformat()}
@@ -124,67 +124,67 @@ class TestCovenantEnforcer:
         return briefed_session_state
 
     @pytest.mark.asyncio
-    async def test_requires_communion_blocks_unbriefed(self, mock_session_state):
+    async def test_requires_init_blocks_unbriefed(self, mock_session_state):
         """Tool should be blocked if not briefed."""
-        enforcer = CovenantEnforcer()
+        enforcer = ProtocolEnforcer()
 
         with patch.object(enforcer, '_get_session_state', return_value=mock_session_state):
-            result = await enforcer.check_communion("/test/project")
+            result = await enforcer.check_init("/test/project")
 
         assert result is not None
-        assert result["violation"] == "COMMUNION_REQUIRED"
+        assert result["violation"] == "INIT_REQUIRED"
 
     @pytest.mark.asyncio
-    async def test_requires_communion_allows_briefed(self, briefed_session_state):
+    async def test_requires_init_allows_briefed(self, briefed_session_state):
         """Tool should be allowed if briefed."""
-        enforcer = CovenantEnforcer()
+        enforcer = ProtocolEnforcer()
 
         with patch.object(enforcer, '_get_session_state', return_value=briefed_session_state):
-            result = await enforcer.check_communion("/test/project")
+            result = await enforcer.check_init("/test/project")
 
         assert result is None  # No violation
 
     @pytest.mark.asyncio
-    async def test_requires_counsel_blocks_without_check(self, briefed_session_state):
+    async def test_requires_context_check_blocks_without_check(self, briefed_session_state):
         """Tool should be blocked if no recent context_check."""
-        enforcer = CovenantEnforcer()
+        enforcer = ProtocolEnforcer()
 
         with patch.object(enforcer, '_get_session_state', return_value=briefed_session_state):
-            result = await enforcer.check_counsel("remember", "/test/project")
+            result = await enforcer.check_context("remember", "/test/project")
 
         assert result is not None
-        assert result["violation"] == "COUNSEL_REQUIRED"
+        assert result["violation"] == "CONTEXT_CHECK_REQUIRED"
 
     @pytest.mark.asyncio
-    async def test_requires_counsel_allows_with_check(self, counseled_session_state):
+    async def test_requires_context_check_allows_with_check(self, context_checked_session_state):
         """Tool should be allowed with recent context_check."""
-        enforcer = CovenantEnforcer()
+        enforcer = ProtocolEnforcer()
 
-        with patch.object(enforcer, '_get_session_state', return_value=counseled_session_state):
-            result = await enforcer.check_counsel("remember", "/test/project")
+        with patch.object(enforcer, '_get_session_state', return_value=context_checked_session_state):
+            result = await enforcer.check_context("remember", "/test/project")
 
         assert result is None  # No violation
 
     def test_exempt_tools_list(self):
         """get_briefing and health should be exempt."""
-        assert "get_briefing" in COVENANT_EXEMPT_TOOLS
-        assert "health" in COVENANT_EXEMPT_TOOLS
+        assert "get_briefing" in PROTOCOL_EXEMPT_TOOLS
+        assert "health" in PROTOCOL_EXEMPT_TOOLS
 
-    def test_communion_required_tools_list(self):
-        """Mutating tools should require communion."""
-        assert "remember" in COMMUNION_REQUIRED_TOOLS
-        assert "remember_batch" in COMMUNION_REQUIRED_TOOLS
-        assert "add_rule" in COMMUNION_REQUIRED_TOOLS
-        assert "update_rule" in COMMUNION_REQUIRED_TOOLS
-        assert "record_outcome" in COMMUNION_REQUIRED_TOOLS
-        assert "prune_memories" in COMMUNION_REQUIRED_TOOLS
+    def test_init_required_tools_list(self):
+        """Mutating tools should require initialization."""
+        assert "remember" in INIT_REQUIRED_TOOLS
+        assert "remember_batch" in INIT_REQUIRED_TOOLS
+        assert "add_rule" in INIT_REQUIRED_TOOLS
+        assert "update_rule" in INIT_REQUIRED_TOOLS
+        assert "record_outcome" in INIT_REQUIRED_TOOLS
+        assert "prune_memories" in INIT_REQUIRED_TOOLS
 
-    def test_counsel_required_tools_list(self):
-        """Mutating tools should require counsel."""
-        assert "remember" in COUNSEL_REQUIRED_TOOLS
-        assert "remember_batch" in COUNSEL_REQUIRED_TOOLS
-        assert "add_rule" in COUNSEL_REQUIRED_TOOLS
-        assert "prune_memories" in COUNSEL_REQUIRED_TOOLS
+    def test_context_check_required_tools_list(self):
+        """Mutating tools should require context check."""
+        assert "remember" in CONTEXT_CHECK_REQUIRED_TOOLS
+        assert "remember_batch" in CONTEXT_CHECK_REQUIRED_TOOLS
+        assert "add_rule" in CONTEXT_CHECK_REQUIRED_TOOLS
+        assert "prune_memories" in CONTEXT_CHECK_REQUIRED_TOOLS
 
 
 class TestPreflightTokenIntegration:
@@ -217,7 +217,7 @@ class TestPreflightTokenIntegration:
         assert "preflight_token" in result
 
         # Verify token is valid
-        from claude_memory.covenant import PreflightToken
+        from claude_memory.protocol import PreflightToken
         token = PreflightToken.verify(result["preflight_token"], project_path)
         assert token is not None
         assert token.action == "About to edit auth.py"

@@ -1,11 +1,11 @@
-# tests/test_full_covenant_flow.py
-"""End-to-end test of the complete Sacred Covenant enforcement flow."""
+# tests/test_full_protocol_flow.py
+"""End-to-end test of the complete Protocol enforcement flow."""
 
 import pytest
 
 
-class TestFullCovenantFlow:
-    """Test the complete covenant flow from communion to seal."""
+class TestFullProtocolFlow:
+    """Test the complete protocol flow from initialization to outcome tracking."""
 
     @pytest.fixture
     def db_manager(self, tmp_path):
@@ -13,8 +13,8 @@ class TestFullCovenantFlow:
         return DatabaseManager(str(tmp_path / "storage"))
 
     @pytest.mark.asyncio
-    async def test_complete_covenant_flow(self, db_manager):
-        """Test: communion -> counsel -> inscribe -> seal."""
+    async def test_complete_protocol_flow(self, db_manager):
+        """Test: init -> context_check -> record -> track_outcome."""
         await db_manager.init_db()
 
         from claude_memory import server
@@ -22,7 +22,7 @@ class TestFullCovenantFlow:
 
         project_path = str(db_manager.storage_path.parent.parent)
 
-        # 1. COMMUNION - get_briefing
+        # 1. INIT - get_briefing
         briefing = await server.get_briefing(project_path=project_path)
         assert briefing["status"] == "ready"
 
@@ -30,22 +30,22 @@ class TestFullCovenantFlow:
         recall_result = await server.recall(topic="test", project_path=project_path)
         assert recall_result.get("status") != "blocked"
 
-        # 3. Verify remember is BLOCKED without counsel
+        # 3. Verify remember is BLOCKED without context check
         remember_result = await server.remember(
             category="decision",
             content="Test decision",
             project_path=project_path,
         )
-        assert remember_result.get("violation") == "COUNSEL_REQUIRED"
+        assert remember_result.get("violation") == "CONTEXT_CHECK_REQUIRED"
 
-        # 4. SEEK COUNSEL - context_check
-        counsel = await server.context_check(
+        # 4. CHECK CONTEXT - context_check
+        context = await server.context_check(
             description="About to make a test decision",
             project_path=project_path,
         )
-        assert "preflight_token" in counsel
+        assert "preflight_token" in context
 
-        # 5. INSCRIBE - remember (now allowed)
+        # 5. RECORD - remember (now allowed)
         decision = await server.remember(
             category="decision",
             content="Use pytest for testing",
@@ -55,7 +55,7 @@ class TestFullCovenantFlow:
         assert "id" in decision
         decision_id = decision["id"]
 
-        # 6. SEAL - record_outcome
+        # 6. TRACK OUTCOME - record_outcome
         outcome = await server.record_outcome(
             memory_id=decision_id,
             outcome="Works great, tests are fast",
@@ -77,7 +77,7 @@ class TestFullCovenantFlow:
 
         # Try to recall without briefing - should be blocked
         result = await server.recall(topic="test", project_path=project_path)
-        assert result.get("violation") == "COMMUNION_REQUIRED"
+        assert result.get("violation") == "INIT_REQUIRED"
         assert result["remedy"]["tool"] == "get_briefing"
 
         # Follow the remedy
