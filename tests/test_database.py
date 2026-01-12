@@ -10,7 +10,7 @@ class TestSQLitePragmas:
     @pytest.mark.asyncio
     async def test_wal_mode_enabled(self):
         """Verify WAL mode is enabled."""
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
 
         with tempfile.TemporaryDirectory() as temp_dir:
             db = DatabaseManager(temp_dir)
@@ -27,7 +27,7 @@ class TestSQLitePragmas:
     @pytest.mark.asyncio
     async def test_foreign_keys_enabled(self):
         """Verify foreign keys are enabled."""
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
 
         with tempfile.TemporaryDirectory() as temp_dir:
             db = DatabaseManager(temp_dir)

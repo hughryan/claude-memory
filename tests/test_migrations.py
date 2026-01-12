@@ -13,7 +13,7 @@ class TestMigrations:
     def legacy_db(self):
         """Create a legacy database without new columns."""
         temp_dir = tempfile.mkdtemp()
-        db_path = Path(temp_dir) / "daem0nmcp.db"
+        db_path = Path(temp_dir) / "claude_memory.db"
 
         conn = sqlite3.connect(str(db_path))
         conn.execute("""
@@ -57,7 +57,7 @@ class TestMigrations:
 
     def test_migration_adds_vector_embedding(self, legacy_db):
         """Verify migration adds vector_embedding column."""
-        from daem0nmcp.migrations import run_migrations
+        from claude_memory.migrations import run_migrations
 
         count, applied = run_migrations(legacy_db)
 
@@ -71,7 +71,7 @@ class TestMigrations:
 
     def test_migration_is_idempotent(self, legacy_db):
         """Verify running migrations twice is safe."""
-        from daem0nmcp.migrations import run_migrations
+        from claude_memory.migrations import run_migrations
 
         count1, _ = run_migrations(legacy_db)
         count2, _ = run_migrations(legacy_db)
@@ -81,7 +81,7 @@ class TestMigrations:
 
     def test_migration_creates_fts_table(self, legacy_db):
         """Verify FTS5 table is created."""
-        from daem0nmcp.migrations import run_migrations
+        from claude_memory.migrations import run_migrations
 
         run_migrations(legacy_db)
 
@@ -105,7 +105,7 @@ class TestMigrations:
 
     def test_migration_adds_pinned_archived_columns(self, legacy_db):
         """Verify migration adds pinned and archived columns."""
-        from daem0nmcp.migrations import run_migrations
+        from claude_memory.migrations import run_migrations
 
         run_migrations(legacy_db)
 
@@ -118,7 +118,7 @@ class TestMigrations:
 
     def test_migration_tracks_schema_version(self, legacy_db):
         """Verify migrations are tracked in schema_version table."""
-        from daem0nmcp.migrations import run_migrations
+        from claude_memory.migrations import run_migrations
 
         count, applied = run_migrations(legacy_db)
 

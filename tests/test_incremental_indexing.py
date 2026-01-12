@@ -7,10 +7,10 @@ from pathlib import Path
 @pytest.fixture
 async def temp_project_with_db(tmp_path):
     """Create a temporary project with database."""
-    from daem0nmcp.database import DatabaseManager
-    from daem0nmcp.code_indexer import CodeIndexManager
+    from claude_memory.database import DatabaseManager
+    from claude_memory.code_indexer import CodeIndexManager
 
-    storage = tmp_path / ".daem0nmcp" / "storage"
+    storage = tmp_path / ".claude-memory" / "storage"
     storage.mkdir(parents=True)
 
     db = DatabaseManager(str(storage))
@@ -37,7 +37,7 @@ class TestFileHashModel:
 
     def test_file_hash_has_required_fields(self):
         """FileHash should have all required fields."""
-        from daem0nmcp.models import FileHash
+        from claude_memory.models import FileHash
 
         fh = FileHash(
             project_path="/test/project",

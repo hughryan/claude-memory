@@ -9,7 +9,7 @@ class TestFullCovenantFlow:
 
     @pytest.fixture
     def db_manager(self, tmp_path):
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
         return DatabaseManager(str(tmp_path / "storage"))
 
     @pytest.mark.asyncio
@@ -17,7 +17,7 @@ class TestFullCovenantFlow:
         """Test: communion -> counsel -> inscribe -> seal."""
         await db_manager.init_db()
 
-        from daem0nmcp import server
+        from claude_memory import server
         server._project_contexts.clear()
 
         project_path = str(db_manager.storage_path.parent.parent)
@@ -70,7 +70,7 @@ class TestFullCovenantFlow:
         """Test that following the remedy unblocks the operation."""
         await db_manager.init_db()
 
-        from daem0nmcp import server
+        from claude_memory import server
         server._project_contexts.clear()
 
         project_path = str(db_manager.storage_path.parent.parent)
@@ -92,7 +92,7 @@ class TestFullCovenantFlow:
         """Test that preflight tools can be called in parallel after briefing."""
         await db_manager.init_db()
 
-        from daem0nmcp import server
+        from claude_memory import server
         import asyncio
 
         server._project_contexts.clear()

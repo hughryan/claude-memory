@@ -20,7 +20,7 @@ class TestMCPResources:
     @pytest.fixture
     async def db_manager(self, temp_storage):
         """Create a database manager with temporary storage."""
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
         db = DatabaseManager(temp_storage)
         await db.init_db()
         yield db
@@ -29,7 +29,7 @@ class TestMCPResources:
     @pytest.fixture
     async def memory_mgr(self, db_manager):
         """Create a memory manager."""
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory.memory import MemoryManager
         mgr = MemoryManager(db_manager)
         yield mgr
         # Close Qdrant if initialized to release locks
@@ -39,12 +39,12 @@ class TestMCPResources:
     @pytest.fixture
     async def rules_engine(self, db_manager):
         """Create a rules engine."""
-        from daem0nmcp.rules import RulesEngine
+        from claude_memory.rules import RulesEngine
         return RulesEngine(db_manager)
 
     @pytest.mark.asyncio
     async def test_warnings_resource_returns_active_warnings(self, db_manager, memory_mgr, temp_storage):
-        """daem0n://warnings resource should return active warnings."""
+        """memory://warnings resource should return active warnings."""
         # Create a warning
         await memory_mgr.remember(
             category="warning",
@@ -54,7 +54,7 @@ class TestMCPResources:
         )
 
         # Test the resource function directly with the db_manager
-        from daem0nmcp.server import _warnings_resource_impl
+        from claude_memory.server import _warnings_resource_impl
 
         result = await _warnings_resource_impl(temp_storage, db_manager)
 
@@ -62,8 +62,8 @@ class TestMCPResources:
 
     @pytest.mark.asyncio
     async def test_warnings_resource_returns_no_warnings_message(self, db_manager, temp_storage):
-        """daem0n://warnings resource should return message when no warnings."""
-        from daem0nmcp.server import _warnings_resource_impl
+        """memory://warnings resource should return message when no warnings."""
+        from claude_memory.server import _warnings_resource_impl
 
         result = await _warnings_resource_impl(temp_storage, db_manager)
 
@@ -71,7 +71,7 @@ class TestMCPResources:
 
     @pytest.mark.asyncio
     async def test_failed_resource_returns_failed_approaches(self, db_manager, memory_mgr, temp_storage):
-        """daem0n://failed resource should return failed approaches."""
+        """memory://failed resource should return failed approaches."""
         # Create a failed decision
         result = await memory_mgr.remember(
             category="decision",
@@ -84,7 +84,7 @@ class TestMCPResources:
             worked=False,
         )
 
-        from daem0nmcp.server import _failed_resource_impl
+        from claude_memory.server import _failed_resource_impl
 
         result = await _failed_resource_impl(temp_storage, db_manager)
 
@@ -92,8 +92,8 @@ class TestMCPResources:
 
     @pytest.mark.asyncio
     async def test_failed_resource_returns_no_failures_message(self, db_manager, temp_storage):
-        """daem0n://failed resource should return message when no failures."""
-        from daem0nmcp.server import _failed_resource_impl
+        """memory://failed resource should return message when no failures."""
+        from claude_memory.server import _failed_resource_impl
 
         result = await _failed_resource_impl(temp_storage, db_manager)
 
@@ -101,7 +101,7 @@ class TestMCPResources:
 
     @pytest.mark.asyncio
     async def test_rules_resource_returns_top_rules(self, db_manager, rules_engine, temp_storage):
-        """daem0n://rules resource should return high-priority rules."""
+        """memory://rules resource should return high-priority rules."""
         await rules_engine.add_rule(
             trigger="adding API endpoint",
             must_do=["Add rate limiting", "Add OpenAPI spec"],
@@ -109,7 +109,7 @@ class TestMCPResources:
             priority=10,
         )
 
-        from daem0nmcp.server import _rules_resource_impl
+        from claude_memory.server import _rules_resource_impl
 
         result = await _rules_resource_impl(temp_storage, db_manager)
 
@@ -117,8 +117,8 @@ class TestMCPResources:
 
     @pytest.mark.asyncio
     async def test_rules_resource_returns_no_rules_message(self, db_manager, temp_storage):
-        """daem0n://rules resource should return message when no rules."""
-        from daem0nmcp.server import _rules_resource_impl
+        """memory://rules resource should return message when no rules."""
+        from claude_memory.server import _rules_resource_impl
 
         result = await _rules_resource_impl(temp_storage, db_manager)
 
@@ -126,7 +126,7 @@ class TestMCPResources:
 
     @pytest.mark.asyncio
     async def test_context_resource_combines_all(self, db_manager, memory_mgr, rules_engine, temp_storage):
-        """daem0n://context resource should combine warnings, failed, and rules."""
+        """memory://context resource should combine warnings, failed, and rules."""
         # Create a warning
         await memory_mgr.remember(
             category="warning",
@@ -153,12 +153,12 @@ class TestMCPResources:
             priority=5,
         )
 
-        from daem0nmcp.server import _context_resource_impl
+        from claude_memory.server import _context_resource_impl
 
         result = await _context_resource_impl(temp_storage, db_manager)
 
         # Should contain sections from all three
-        assert "Daem0n Project Context" in result
+        assert "Memory Project Context" in result
         assert "Warning" in result or "warning" in result
         assert "Failed" in result or "failed" in result
         assert "Rule" in result or "rule" in result
@@ -174,7 +174,7 @@ class TestMCPResources:
                 project_path=temp_storage,
             )
 
-        from daem0nmcp.server import _warnings_resource_impl
+        from claude_memory.server import _warnings_resource_impl
 
         result = await _warnings_resource_impl(temp_storage, db_manager)
 

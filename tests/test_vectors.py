@@ -1,6 +1,6 @@
 """Tests for the vector embeddings module."""
 
-from daem0nmcp import vectors
+from claude_memory import vectors
 
 
 class TestVectorAvailability:
@@ -32,7 +32,7 @@ class TestHybridSearch:
 
     def test_hybrid_fallback_to_tfidf(self):
         """Hybrid search falls back to TF-IDF when vectors unavailable."""
-        from daem0nmcp.similarity import TFIDFIndex
+        from claude_memory.similarity import TFIDFIndex
 
         tfidf = TFIDFIndex()
         tfidf.add_document(1, "JWT authentication for API security")

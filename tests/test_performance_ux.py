@@ -9,7 +9,7 @@ class TestParseTreeCache:
 
     def test_cache_hit_on_unchanged_file(self, tmp_path):
         """Second parse should hit cache."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         if not indexer.available:
@@ -28,7 +28,7 @@ class TestParseTreeCache:
 
     def test_cache_invalidation_on_change(self, tmp_path):
         """Changed file should invalidate cache."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         if not indexer.available:
@@ -50,26 +50,26 @@ class TestExtendedConfig:
 
     def test_default_embedding_model(self):
         """Default embedding model is all-MiniLM-L6-v2."""
-        from daem0nmcp.config import Settings
+        from claude_memory.config import Settings
         settings = Settings()
         assert settings.embedding_model == "all-MiniLM-L6-v2"
 
     def test_default_parse_cache_maxsize(self):
         """Default parse cache maxsize is 200."""
-        from daem0nmcp.config import Settings
+        from claude_memory.config import Settings
         settings = Settings()
         assert settings.parse_tree_cache_maxsize == 200
 
     def test_config_from_env(self, monkeypatch):
         """Config can be set via environment."""
-        monkeypatch.setenv("DAEM0NMCP_PARSE_TREE_CACHE_MAXSIZE", "500")
-        from daem0nmcp.config import Settings
+        monkeypatch.setenv("CLAUDE_MEMORY_PARSE_TREE_CACHE_MAXSIZE", "500")
+        from claude_memory.config import Settings
         settings = Settings()
         assert settings.parse_tree_cache_maxsize == 500
 
     def test_default_index_languages(self):
         """Default index_languages is empty list."""
-        from daem0nmcp.config import Settings
+        from claude_memory.config import Settings
         settings = Settings()
         assert settings.index_languages == []
 
@@ -77,9 +77,9 @@ class TestExtendedConfig:
 @pytest.fixture
 async def covenant_compliant_project(tmp_path):
     """Create a covenant-compliant project for testing."""
-    from daem0nmcp.database import DatabaseManager
+    from claude_memory.database import DatabaseManager
 
-    storage = tmp_path / ".daem0nmcp" / "storage"
+    storage = tmp_path / ".claude-memory" / "storage"
     storage.mkdir(parents=True)
 
     db = DatabaseManager(str(storage))
@@ -96,7 +96,7 @@ class TestEnhancedHealth:
     @pytest.mark.asyncio
     async def test_health_includes_code_entities(self, covenant_compliant_project):
         """Health should include code entity stats."""
-        from daem0nmcp import server
+        from claude_memory import server
 
         result = await server.health(project_path=covenant_compliant_project)
 

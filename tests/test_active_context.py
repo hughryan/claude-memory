@@ -5,7 +5,7 @@ import tempfile
 import shutil
 from datetime import datetime, timezone, timedelta
 
-from daem0nmcp.models import ActiveContextItem
+from claude_memory.models import ActiveContextItem
 
 
 class TestActiveContextModel:
@@ -39,8 +39,8 @@ def temp_storage():
 @pytest.fixture
 async def active_context_manager(temp_storage):
     """Create an active context manager with temporary storage."""
-    from daem0nmcp.database import DatabaseManager
-    from daem0nmcp.active_context import ActiveContextManager
+    from claude_memory.database import DatabaseManager
+    from claude_memory.active_context import ActiveContextManager
 
     db = DatabaseManager(temp_storage)
     await db.init_db()
@@ -55,7 +55,7 @@ class TestActiveContextManager:
     @pytest.mark.asyncio
     async def test_add_to_active_context(self, active_context_manager):
         """Test adding a memory to active context."""
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory.memory import MemoryManager
 
         mem_manager = MemoryManager(active_context_manager.db)
         mem = await mem_manager.remember(
@@ -87,7 +87,7 @@ class TestActiveContextManager:
     @pytest.mark.asyncio
     async def test_add_duplicate_memory_returns_already_exists(self, active_context_manager):
         """Test that adding the same memory twice returns already_exists."""
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory.memory import MemoryManager
 
         mem_manager = MemoryManager(active_context_manager.db)
         mem = await mem_manager.remember(
@@ -112,7 +112,7 @@ class TestActiveContextManager:
     @pytest.mark.asyncio
     async def test_remove_from_context(self, active_context_manager):
         """Test removing a memory from active context."""
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory.memory import MemoryManager
 
         mem_manager = MemoryManager(active_context_manager.db)
         mem = await mem_manager.remember(
@@ -145,7 +145,7 @@ class TestActiveContextManager:
     @pytest.mark.asyncio
     async def test_get_active_context(self, active_context_manager):
         """Test getting all items in active context."""
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory.memory import MemoryManager
 
         mem_manager = MemoryManager(active_context_manager.db)
 
@@ -174,7 +174,7 @@ class TestActiveContextManager:
     @pytest.mark.asyncio
     async def test_clear_context(self, active_context_manager):
         """Test clearing all items from active context."""
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory.memory import MemoryManager
 
         mem_manager = MemoryManager(active_context_manager.db)
         mem = await mem_manager.remember(category="decision", content="Test")
@@ -196,7 +196,7 @@ class TestActiveContextManager:
     @pytest.mark.asyncio
     async def test_context_limit(self, active_context_manager):
         """Test that active context respects the 10-item limit."""
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory.memory import MemoryManager
 
         mem_manager = MemoryManager(active_context_manager.db)
 
@@ -227,7 +227,7 @@ class TestActiveContextManager:
     @pytest.mark.asyncio
     async def test_cleanup_expired(self, active_context_manager):
         """Test cleanup of expired context items."""
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory.memory import MemoryManager
 
         mem_manager = MemoryManager(active_context_manager.db)
         mem = await mem_manager.remember(category="decision", content="Temp decision")
@@ -252,7 +252,7 @@ class TestActiveContextMCPTools:
     @pytest.mark.asyncio
     async def test_mcp_set_active_context(self, covenant_compliant_project):
         """Test the MCP tool for setting active context."""
-        from daem0nmcp import server
+        from claude_memory import server
 
         # Create a memory first
         mem = await server.remember(
@@ -281,7 +281,7 @@ class TestActiveContextMCPTools:
     @pytest.mark.asyncio
     async def test_mcp_remove_from_active_context(self, covenant_compliant_project):
         """Test removing a memory from active context via MCP tool."""
-        from daem0nmcp import server
+        from claude_memory import server
 
         # Create and add a memory
         mem = await server.remember(
@@ -312,7 +312,7 @@ class TestActiveContextMCPTools:
     @pytest.mark.asyncio
     async def test_mcp_clear_active_context(self, covenant_compliant_project):
         """Test clearing all active context via MCP tool."""
-        from daem0nmcp import server
+        from claude_memory import server
 
         # Create and add multiple memories
         mem1 = await server.remember(
@@ -346,7 +346,7 @@ class TestActiveContextMCPTools:
     @pytest.mark.asyncio
     async def test_mcp_set_active_context_with_expiry(self, covenant_compliant_project):
         """Test setting active context with expiration."""
-        from daem0nmcp import server
+        from claude_memory import server
 
         mem = await server.remember(
             category="learning",
@@ -366,7 +366,7 @@ class TestActiveContextMCPTools:
     @pytest.mark.asyncio
     async def test_mcp_set_active_context_missing_project_path(self):
         """Test that set_active_context requires project_path."""
-        from daem0nmcp import server
+        from claude_memory import server
 
         result = await server.set_active_context(
             memory_id=1,
@@ -383,7 +383,7 @@ class TestBriefingIncludesActiveContext:
     @pytest.mark.asyncio
     async def test_briefing_includes_active_context(self, covenant_compliant_project):
         """get_briefing should include active context items."""
-        from daem0nmcp import server
+        from claude_memory import server
 
         # Create and activate a memory
         mem = await server.remember(
@@ -411,9 +411,9 @@ class TestAutoActivationOnFailure:
     @pytest.mark.asyncio
     async def test_failed_decision_auto_activates(self, temp_storage):
         """Failed decisions should auto-activate in context."""
-        from daem0nmcp.database import DatabaseManager
-        from daem0nmcp.memory import MemoryManager
-        from daem0nmcp.active_context import ActiveContextManager
+        from claude_memory.database import DatabaseManager
+        from claude_memory.memory import MemoryManager
+        from claude_memory.active_context import ActiveContextManager
 
         db = DatabaseManager(temp_storage)
         await db.init_db()

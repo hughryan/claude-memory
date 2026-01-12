@@ -1,6 +1,6 @@
 # tests/conftest.py
 """
-Pytest configuration for Daem0nMCP tests.
+Pytest configuration for ClaudeMemory tests.
 """
 
 import getpass
@@ -88,7 +88,7 @@ async def ensure_covenant_compliance(project_path: str):
     Calls get_briefing() and context_check() to satisfy the Sacred Covenant
     requirements for tools that need communion and/or counsel.
     """
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Ensure communion (get_briefing)
     await server.get_briefing(project_path=project_path)
@@ -108,8 +108,8 @@ async def covenant_compliant_project(tmp_path):
     Returns the project path that can be used with tools requiring
     communion and/or counsel.
     """
-    from daem0nmcp.database import DatabaseManager
-    from daem0nmcp import server
+    from claude_memory.database import DatabaseManager
+    from claude_memory import server
 
     project_path = str(tmp_path)
     storage_path = str(tmp_path / "storage")

@@ -3,7 +3,7 @@
 import pytest
 from datetime import datetime, timezone
 
-from daem0nmcp.models import ExtractedEntity, MemoryEntityRef
+from claude_memory.models import ExtractedEntity, MemoryEntityRef
 
 
 class TestExtractedEntityModel:
@@ -71,7 +71,7 @@ class TestMemoryEntityRefModel:
 @pytest.fixture
 def extractor():
     """Create an entity extractor."""
-    from daem0nmcp.entity_extractor import EntityExtractor
+    from claude_memory.entity_extractor import EntityExtractor
     return EntityExtractor()
 
 
@@ -127,8 +127,8 @@ def temp_storage():
 @pytest.fixture
 async def entity_manager(temp_storage):
     """Create an entity manager with temporary storage."""
-    from daem0nmcp.database import DatabaseManager
-    from daem0nmcp.entity_manager import EntityManager
+    from claude_memory.database import DatabaseManager
+    from claude_memory.entity_manager import EntityManager
 
     db = DatabaseManager(temp_storage)
     await db.init_db()
@@ -140,8 +140,8 @@ async def entity_manager(temp_storage):
 @pytest.mark.asyncio
 async def test_process_memory_extracts_entities(entity_manager, temp_storage):
     """Processing a memory should extract and store entities."""
-    from daem0nmcp.memory import MemoryManager
-    from daem0nmcp.database import DatabaseManager
+    from claude_memory.memory import MemoryManager
+    from claude_memory.database import DatabaseManager
 
     db = DatabaseManager(temp_storage)
     await db.init_db()
@@ -173,8 +173,8 @@ async def test_process_memory_extracts_entities(entity_manager, temp_storage):
 @pytest.mark.asyncio
 async def test_get_memories_for_entity(entity_manager, temp_storage):
     """Should retrieve memories by entity name."""
-    from daem0nmcp.memory import MemoryManager
-    from daem0nmcp.database import DatabaseManager
+    from claude_memory.memory import MemoryManager
+    from claude_memory.database import DatabaseManager
 
     db = DatabaseManager(temp_storage)
     await db.init_db()
@@ -203,8 +203,8 @@ async def test_get_memories_for_entity(entity_manager, temp_storage):
 @pytest.mark.asyncio
 async def test_get_popular_entities(entity_manager, temp_storage):
     """Should return most mentioned entities."""
-    from daem0nmcp.memory import MemoryManager
-    from daem0nmcp.database import DatabaseManager
+    from claude_memory.memory import MemoryManager
+    from claude_memory.database import DatabaseManager
 
     db = DatabaseManager(temp_storage)
     await db.init_db()
@@ -231,9 +231,9 @@ async def test_get_popular_entities(entity_manager, temp_storage):
 @pytest.mark.asyncio
 async def test_remember_auto_extracts_entities(temp_storage):
     """remember() should auto-extract entities."""
-    from daem0nmcp.database import DatabaseManager
-    from daem0nmcp.memory import MemoryManager
-    from daem0nmcp.entity_manager import EntityManager
+    from claude_memory.database import DatabaseManager
+    from claude_memory.memory import MemoryManager
+    from claude_memory.entity_manager import EntityManager
 
     db = DatabaseManager(temp_storage)
     await db.init_db()
@@ -264,7 +264,7 @@ async def test_remember_auto_extracts_entities(temp_storage):
 @pytest.fixture
 async def covenant_compliant_project_for_entities(tmp_path):
     """Create a project that passes communion and counsel checks for entity tests."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     project_path = str(tmp_path)
 
@@ -272,7 +272,7 @@ async def covenant_compliant_project_for_entities(tmp_path):
     server._project_contexts.clear()
 
     # Establish communion (get_briefing)
-    # This creates the DB at the right path: project_path/.daem0nmcp/storage
+    # This creates the DB at the right path: project_path/.claude-memory/storage
     await server.get_briefing(project_path=project_path)
 
     # Establish counsel (context_check)
@@ -287,7 +287,7 @@ async def covenant_compliant_project_for_entities(tmp_path):
 @pytest.mark.asyncio
 async def test_mcp_recall_by_entity(covenant_compliant_project_for_entities):
     """Test MCP tool for recalling memories by entity."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Create memory with entity
     await server.remember(
@@ -309,7 +309,7 @@ async def test_mcp_recall_by_entity(covenant_compliant_project_for_entities):
 @pytest.mark.asyncio
 async def test_mcp_recall_by_entity_with_type(covenant_compliant_project_for_entities):
     """Test MCP tool for recalling by entity with type filter."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Create memory with entity
     await server.remember(
@@ -331,7 +331,7 @@ async def test_mcp_recall_by_entity_with_type(covenant_compliant_project_for_ent
 @pytest.mark.asyncio
 async def test_mcp_list_entities(covenant_compliant_project_for_entities):
     """Test MCP tool for listing entities."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Create memories with entities
     await server.remember(
@@ -357,7 +357,7 @@ async def test_mcp_list_entities(covenant_compliant_project_for_entities):
 @pytest.mark.asyncio
 async def test_mcp_list_entities_with_type_filter(covenant_compliant_project_for_entities):
     """Test MCP tool for listing entities with type filter."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Create memories with entities
     await server.remember(
@@ -381,7 +381,7 @@ async def test_mcp_list_entities_with_type_filter(covenant_compliant_project_for
 @pytest.mark.asyncio
 async def test_mcp_backfill_entities(covenant_compliant_project_for_entities):
     """Test MCP tool for backfilling entities from existing memories."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Create memory (it will auto-extract, but let's test backfill anyway)
     await server.remember(
@@ -403,7 +403,7 @@ async def test_mcp_backfill_entities(covenant_compliant_project_for_entities):
 @pytest.mark.asyncio
 async def test_mcp_recall_by_entity_missing_project_path():
     """Test that recall_by_entity requires project_path."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Clear any default project path
     original_default = server._default_project_path
@@ -424,7 +424,7 @@ async def test_mcp_recall_by_entity_missing_project_path():
 @pytest.mark.asyncio
 async def test_mcp_list_entities_missing_project_path():
     """Test that list_entities requires project_path."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Clear any default project path
     original_default = server._default_project_path
@@ -442,7 +442,7 @@ async def test_mcp_list_entities_missing_project_path():
 @pytest.mark.asyncio
 async def test_mcp_backfill_entities_missing_project_path():
     """Test that backfill_entities requires project_path."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Clear any default project path
     original_default = server._default_project_path

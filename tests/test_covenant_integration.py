@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import patch, AsyncMock
 
-from daem0nmcp.covenant import COMMUNION_REQUIRED_TOOLS, COUNSEL_REQUIRED_TOOLS
+from claude_memory.covenant import COMMUNION_REQUIRED_TOOLS, COUNSEL_REQUIRED_TOOLS
 
 
 class TestCovenantIntegration:
@@ -11,12 +11,12 @@ class TestCovenantIntegration:
 
     @pytest.fixture
     def db_manager(self, tmp_path):
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
         return DatabaseManager(str(tmp_path / "storage"))
 
     @pytest.fixture
     def memory_mgr(self, db_manager):
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory.memory import MemoryManager
         return MemoryManager(db_manager)
 
     @pytest.mark.asyncio
@@ -24,7 +24,7 @@ class TestCovenantIntegration:
         """remember() should be blocked if get_briefing not called."""
         await db_manager.init_db()
 
-        from daem0nmcp import server
+        from claude_memory import server
         server._project_contexts.clear()
 
         result = await server.remember(
@@ -41,7 +41,7 @@ class TestCovenantIntegration:
         """remember() should be blocked if context_check not called after briefing."""
         await db_manager.init_db()
 
-        from daem0nmcp import server
+        from claude_memory import server
         server._project_contexts.clear()
 
         project_path = str(db_manager.storage_path.parent.parent)
@@ -62,7 +62,7 @@ class TestCovenantIntegration:
         """remember() should work after briefing + context_check."""
         await db_manager.init_db()
 
-        from daem0nmcp import server
+        from claude_memory import server
         server._project_contexts.clear()
 
         project_path = str(db_manager.storage_path.parent.parent)
@@ -87,7 +87,7 @@ class TestCovenantIntegration:
         """recall() should work after briefing (no counsel required)."""
         await db_manager.init_db()
 
-        from daem0nmcp import server
+        from claude_memory import server
         server._project_contexts.clear()
 
         project_path = str(db_manager.storage_path.parent.parent)
@@ -106,7 +106,7 @@ class TestCovenantIntegration:
         """health() should work without any covenant compliance."""
         await db_manager.init_db()
 
-        from daem0nmcp import server
+        from claude_memory import server
         server._project_contexts.clear()
 
         project_path = str(db_manager.storage_path.parent.parent)

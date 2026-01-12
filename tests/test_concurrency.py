@@ -1,4 +1,4 @@
-"""Tests for concurrent access to Daem0n-MCP resources.
+"""Tests for concurrent access to Claude Memory resources.
 
 Tests race conditions, concurrent context access, and thread safety
 of caching and memory operations.
@@ -9,10 +9,10 @@ import asyncio
 import tempfile
 import shutil
 
-from daem0nmcp.database import DatabaseManager
-from daem0nmcp.memory import MemoryManager
-from daem0nmcp.rules import RulesEngine
-from daem0nmcp.cache import TTLCache, get_recall_cache, get_rules_cache
+from claude_memory.database import DatabaseManager
+from claude_memory.memory import MemoryManager
+from claude_memory.rules import RulesEngine
+from claude_memory.cache import TTLCache, get_recall_cache, get_rules_cache
 
 
 @pytest.fixture

@@ -1,5 +1,5 @@
 """
-Tests for the Daem0nMCP CLI.
+Tests for the ClaudeMemory CLI.
 
 These tests verify the command-line interface functionality using subprocess calls.
 """
@@ -27,13 +27,13 @@ def temp_project():
 def cli_env(temp_project):
     """Environment for CLI commands pointing to temp project."""
     env = os.environ.copy()
-    env['DAEM0NMCP_PROJECT_ROOT'] = temp_project
+    env['CLAUDE_MEMORY_PROJECT_ROOT'] = temp_project
     return env
 
 
 def run_cli(*args, env=None, project_path=None):
     """Run CLI command and return result."""
-    cmd = [sys.executable, "-m", "daem0nmcp.cli"]
+    cmd = [sys.executable, "-m", "claude_memory.cli"]
     if project_path:
         cmd.extend(["--project-path", project_path])
     cmd.extend(args)
@@ -47,7 +47,7 @@ class TestCLIHelp:
         """Test that --help works."""
         result = run_cli("--help")
         assert result.returncode == 0
-        assert "Daem0nMCP CLI" in result.stdout or "usage:" in result.stdout.lower()
+        assert "ClaudeMemory CLI" in result.stdout or "usage:" in result.stdout.lower()
 
     def test_no_command_shows_help(self):
         """Test that running without command shows help."""

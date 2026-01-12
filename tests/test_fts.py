@@ -17,8 +17,8 @@ class TestFTS5Search:
     @pytest.mark.asyncio
     async def test_fts_search_finds_content(self, temp_storage):
         """Verify FTS5 search works for content."""
-        from daem0nmcp.database import DatabaseManager
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory.database import DatabaseManager
+        from claude_memory.memory import MemoryManager
 
         db = DatabaseManager(temp_storage)
         await db.init_db()
@@ -46,8 +46,8 @@ class TestFTS5Search:
     @pytest.mark.asyncio
     async def test_fts_search_with_tag_filter(self, temp_storage):
         """Verify FTS search can filter by tags."""
-        from daem0nmcp.database import DatabaseManager
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory.database import DatabaseManager
+        from claude_memory.memory import MemoryManager
 
         db = DatabaseManager(temp_storage)
         await db.init_db()

@@ -60,7 +60,7 @@ async def _handle_change(self, file_path):
 
 ### 1.1 Create FileHash Model
 
-**File:** `daem0nmcp/models.py`
+**File:** `claude_memory/models.py`
 
 ```python
 class FileHash(Base):
@@ -80,7 +80,7 @@ class FileHash(Base):
 
 ### 1.2 Add Migration
 
-**File:** `daem0nmcp/migrations/schema.py`
+**File:** `claude_memory/migrations/schema.py`
 
 ```python
 (11, "Add file_hashes table for incremental indexing", [
@@ -104,7 +104,7 @@ class FileHash(Base):
 
 ### 2.1 Add Hash Computation
 
-**File:** `daem0nmcp/code_indexer.py`
+**File:** `claude_memory/code_indexer.py`
 
 ```python
 def compute_file_hash(file_path: Path) -> str:
@@ -249,7 +249,7 @@ async def _store_file_entities(
 
 ### 3.1 Add CodeIndexManager to FileWatcher
 
-**File:** `daem0nmcp/watcher.py`
+**File:** `claude_memory/watcher.py`
 
 ```python
 def __init__(
@@ -307,7 +307,7 @@ async def _handle_change(self, file_path: Path) -> None:
 
 ### 4.1 Add Risk Assessment
 
-**File:** `daem0nmcp/code_indexer.py`
+**File:** `claude_memory/code_indexer.py`
 
 ```python
 async def analyze_impact(self, entity_name: str, project_path: Optional[str] = None):
@@ -407,7 +407,7 @@ def _generate_suggested_checks(self, entity, affected, affected_files, risk_leve
 
 ## Phase 5: Configuration (1-2 hours)
 
-**File:** `daem0nmcp/config.py`
+**File:** `claude_memory/config.py`
 
 ```python
 # Code Indexing

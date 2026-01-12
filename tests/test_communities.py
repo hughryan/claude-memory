@@ -5,7 +5,7 @@ import tempfile
 import shutil
 from datetime import datetime, timezone
 
-from daem0nmcp.models import MemoryCommunity
+from claude_memory.models import MemoryCommunity
 
 
 @pytest.fixture
@@ -66,7 +66,7 @@ class TestMemoryCommunityModel:
 @pytest.mark.asyncio
 async def test_memory_communities_table_created(temp_storage):
     """Verify memory_communities table is created during database initialization."""
-    from daem0nmcp.database import DatabaseManager
+    from claude_memory.database import DatabaseManager
 
     db = DatabaseManager(temp_storage)
     await db.init_db()
@@ -86,7 +86,7 @@ async def test_memory_communities_table_created(temp_storage):
 @pytest.fixture
 async def db_manager(temp_storage):
     """Shared database manager for community tests."""
-    from daem0nmcp.database import DatabaseManager
+    from claude_memory.database import DatabaseManager
     db = DatabaseManager(temp_storage)
     await db.init_db()
     yield db
@@ -96,14 +96,14 @@ async def db_manager(temp_storage):
 @pytest.fixture
 async def community_manager(db_manager):
     """Create a community manager with shared database."""
-    from daem0nmcp.communities import CommunityManager
+    from claude_memory.communities import CommunityManager
     return CommunityManager(db_manager)
 
 
 @pytest.fixture
 async def memory_manager(db_manager):
     """Create a memory manager with shared database."""
-    from daem0nmcp.memory import MemoryManager
+    from claude_memory.memory import MemoryManager
     manager = MemoryManager(db_manager)
     yield manager
     if manager._qdrant:
@@ -145,7 +145,7 @@ async def test_detect_communities_by_tags(community_manager, memory_manager):
 @pytest.fixture
 async def covenant_compliant_project(temp_storage):
     """Create a project that passes communion checks."""
-    from daem0nmcp import server
+    from claude_memory import server
     # Reset server state
     server._project_contexts.clear()
 
@@ -157,7 +157,7 @@ async def covenant_compliant_project(temp_storage):
 @pytest.mark.asyncio
 async def test_mcp_rebuild_communities(covenant_compliant_project):
     """Test the MCP tool for rebuilding communities."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Create some memories with tags
     await server.remember(
@@ -183,7 +183,7 @@ async def test_mcp_rebuild_communities(covenant_compliant_project):
 @pytest.mark.asyncio
 async def test_mcp_list_communities(covenant_compliant_project):
     """Test the MCP tool for listing communities."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Create memories and build communities first
     await server.remember(
@@ -211,7 +211,7 @@ async def test_mcp_list_communities(covenant_compliant_project):
 @pytest.mark.asyncio
 async def test_mcp_get_community_details(covenant_compliant_project):
     """Test the MCP tool for getting community details."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Create memories
     await server.remember(
@@ -247,7 +247,7 @@ async def test_mcp_get_community_details(covenant_compliant_project):
 @pytest.mark.asyncio
 async def test_hierarchical_recall(memory_manager, temp_storage):
     """Hierarchical recall should return community summaries first."""
-    from daem0nmcp.communities import CommunityManager
+    from claude_memory.communities import CommunityManager
 
     # Create related memories
     await memory_manager.remember(
@@ -279,7 +279,7 @@ async def test_hierarchical_recall(memory_manager, temp_storage):
 @pytest.mark.asyncio
 async def test_mcp_recall_hierarchical(covenant_compliant_project):
     """Test the MCP tool for hierarchical recall."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     result = await server.recall_hierarchical(
         topic="authentication",

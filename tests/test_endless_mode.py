@@ -5,8 +5,8 @@ import pytest
 import tempfile
 import shutil
 
-from daem0nmcp.database import DatabaseManager
-from daem0nmcp.memory import MemoryManager
+from claude_memory.database import DatabaseManager
+from claude_memory.memory import MemoryManager
 
 
 @pytest.fixture
@@ -146,7 +146,7 @@ class TestCondensedBriefing:
         )
 
         # Import server and call _prefetch_focus_areas
-        from daem0nmcp.server import _prefetch_focus_areas, ProjectContext
+        from claude_memory.server import _prefetch_focus_areas, ProjectContext
 
         # Create a minimal project context
         ctx = ProjectContext(
@@ -154,7 +154,7 @@ class TestCondensedBriefing:
             rules_engine=None,
             db_manager=None,
             project_path="/test",
-            storage_path="/test/.daem0nmcp"
+            storage_path="/test/.claude-memory"
         )
 
         # Mock recall to capture the condensed parameter
@@ -179,7 +179,7 @@ class TestEndlessModeMCP:
 
     @pytest.fixture
     def db_manager(self, tmp_path):
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
         return DatabaseManager(str(tmp_path / "storage"))
 
     @pytest.mark.asyncio
@@ -187,7 +187,7 @@ class TestEndlessModeMCP:
         """MCP recall tool should accept condensed parameter."""
         await db_manager.init_db()
 
-        from daem0nmcp import server
+        from claude_memory import server
         server._project_contexts.clear()
 
         project_path = str(db_manager.storage_path.parent.parent)
@@ -229,7 +229,7 @@ class TestEndlessModeMCP:
         """Verify condensed=True strips fields, condensed=False preserves them."""
         await db_manager.init_db()
 
-        from daem0nmcp import server
+        from claude_memory import server
         server._project_contexts.clear()
 
         project_path = str(db_manager.storage_path.parent.parent)

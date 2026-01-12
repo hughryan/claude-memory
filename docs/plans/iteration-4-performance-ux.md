@@ -34,7 +34,7 @@ tree = parser.parse(source)  # No caching
 
 #### 1.1 Add Cache to TreeSitterIndexer
 
-**File:** `daem0nmcp/code_indexer.py`
+**File:** `claude_memory/code_indexer.py`
 
 ```python
 def __init__(self):
@@ -128,7 +128,7 @@ def index_file(self, file_path: Path, project_path: Path):
 
 ### New Config Options
 
-**File:** `daem0nmcp/config.py`
+**File:** `claude_memory/config.py`
 
 Add to `Settings` class:
 
@@ -209,7 +209,7 @@ self.vector_weight = settings.hybrid_vector_weight
 
 ### Implementation
 
-**File:** `daem0nmcp/cli.py`
+**File:** `claude_memory/cli.py`
 
 ```python
 async def get_comprehensive_status(db, memory, project_path: str) -> dict:
@@ -322,7 +322,7 @@ elif args.command == "status":
 
 ### Implementation
 
-**File:** `daem0nmcp/server.py`
+**File:** `claude_memory/server.py`
 
 ```python
 @mcp.tool()
@@ -411,7 +411,7 @@ async def health(project_path: Optional[str] = None) -> Dict[str, Any]:
 ```python
 class TestParseTreeCache:
     def test_cache_hit_on_unchanged_file(self, temp_project):
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         py_file = temp_project / "sample.py"
@@ -455,13 +455,13 @@ class TestParseTreeCache:
 class TestConfigValidation:
     def test_invalid_hybrid_weight_rejected(self):
         from pydantic import ValidationError
-        from daem0nmcp.config import Settings
+        from claude_memory.config import Settings
 
         with pytest.raises(ValidationError):
             Settings(hybrid_vector_weight=1.5)
 
     def test_config_warnings(self):
-        from daem0nmcp.config import Settings
+        from claude_memory.config import Settings
 
         s = Settings(hybrid_vector_weight=0.0)
         warnings = s.get_config_warnings()
@@ -474,7 +474,7 @@ class TestConfigValidation:
 class TestEnhancedStatus:
     @pytest.mark.asyncio
     async def test_status_includes_entities(self, db_and_memory, tmp_path):
-        from daem0nmcp.cli import get_comprehensive_status
+        from claude_memory.cli import get_comprehensive_status
 
         db, memory = db_and_memory
         result = await get_comprehensive_status(db, memory, str(tmp_path))
@@ -489,7 +489,7 @@ class TestEnhancedStatus:
 class TestEnhancedHealth:
     @pytest.mark.asyncio
     async def test_health_includes_index_freshness(self, project):
-        from daem0nmcp import server
+        from claude_memory import server
 
         result = await server.health(project_path=project)
 
@@ -531,9 +531,9 @@ class TestEnhancedHealth:
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `DAEM0NMCP_HYBRID_VECTOR_WEIGHT` | float | 0.3 | Vector vs TF-IDF weight |
-| `DAEM0NMCP_SEARCH_DIVERSITY_MAX_PER_FILE` | int | 3 | Max results per file |
-| `DAEM0NMCP_SEARCH_DEFAULT_LIMIT` | int | 20 | Default search limit |
-| `DAEM0NMCP_EMBEDDING_MODEL` | str | all-MiniLM-L6-v2 | Sentence transformer model |
-| `DAEM0NMCP_PARSE_TREE_CACHE_MAXSIZE` | int | 200 | Max cached parse trees |
-| `DAEM0NMCP_INDEX_LANGUAGES` | list | [] | Languages to index |
+| `CLAUDE_MEMORY_HYBRID_VECTOR_WEIGHT` | float | 0.3 | Vector vs TF-IDF weight |
+| `CLAUDE_MEMORY_SEARCH_DIVERSITY_MAX_PER_FILE` | int | 3 | Max results per file |
+| `CLAUDE_MEMORY_SEARCH_DEFAULT_LIMIT` | int | 20 | Default search limit |
+| `CLAUDE_MEMORY_EMBEDDING_MODEL` | str | all-MiniLM-L6-v2 | Sentence transformer model |
+| `CLAUDE_MEMORY_PARSE_TREE_CACHE_MAXSIZE` | int | 200 | Max cached parse trees |
+| `CLAUDE_MEMORY_INDEX_LANGUAGES` | list | [] | Languages to index |

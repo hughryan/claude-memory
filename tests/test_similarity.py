@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone, timedelta
 
-from daem0nmcp.similarity import (
+from claude_memory.similarity import (
     tokenize,
     extract_code_symbols,
     TFIDFIndex,

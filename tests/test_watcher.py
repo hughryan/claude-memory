@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-from daem0nmcp.watcher import (
+from claude_memory.watcher import (
     FileWatcher,
     WatcherConfig,
     WatcherNotification,
@@ -21,13 +21,13 @@ from daem0nmcp.watcher import (
     CallbackChannel,
     create_watcher,
 )
-from daem0nmcp.channels import (
+from claude_memory.channels import (
     SystemNotifyChannel,
     LogFileChannel,
     EditorPollChannel,
 )
-from daem0nmcp.database import DatabaseManager
-from daem0nmcp.memory import MemoryManager
+from claude_memory.database import DatabaseManager
+from claude_memory.memory import MemoryManager
 
 
 # =============================================================================
@@ -37,7 +37,7 @@ from daem0nmcp.memory import MemoryManager
 @pytest.fixture
 def temp_project():
     """Create a temporary project directory."""
-    temp_dir = tempfile.mkdtemp(prefix="daem0n_test_")
+    temp_dir = tempfile.mkdtemp(prefix="cm_test_")
     project_path = Path(temp_dir) / "test_project"
     project_path.mkdir()
 
@@ -60,7 +60,7 @@ def temp_project():
 @pytest.fixture
 def temp_storage():
     """Create a temporary storage directory."""
-    temp_dir = tempfile.mkdtemp(prefix="daem0n_storage_")
+    temp_dir = tempfile.mkdtemp(prefix="cm_storage_")
     yield Path(temp_dir)
     shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -140,7 +140,7 @@ class TestWatcherConfig:
         assert ".git" in config.skip_patterns
         assert "node_modules" in config.skip_patterns
         assert "__pycache__" in config.skip_patterns
-        assert ".daem0nmcp" in config.skip_patterns
+        assert ".claude-memory" in config.skip_patterns
 
     def test_custom_skip_patterns(self):
         """Test custom skip patterns override defaults."""

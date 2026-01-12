@@ -1,4 +1,4 @@
-# Daem0n-MCP Cognitive Architecture Upgrade
+# Claude Memory Cognitive Architecture Upgrade
 
 **Date:** 2026-01-02
 **Status:** Proposed
@@ -6,14 +6,14 @@
 
 ## Executive Summary
 
-This plan evolves Daem0n-MCP from a "Reactive Semantic Engine" to a full "Cognitive Architecture" with:
+This plan evolves Claude Memory from a "Reactive Semantic Engine" to a full "Cognitive Architecture" with:
 
 1. **Scalable vector infrastructure** (Qdrant backend)
 2. **Proactive alerting** (file watcher + notification channels)
 3. **Code understanding** (AST indexing + entity linking)
 4. **Team knowledge sharing** (git-based sync)
 
-**Key design decision:** Enhance the existing architecture rather than replace it with off-the-shelf components (like Mem0). The current system has domain-specific features (Sacred Covenant, Rules, graph relationships, decay/reinforcement) that generic tools don't provide.
+**Key design decision:** Enhance the existing architecture rather than replace it with off-the-shelf components (like Mem0). The current system has domain-specific features (Protocol, Rules, graph relationships, decay/reinforcement) that generic tools don't provide.
 
 ---
 
@@ -84,7 +84,7 @@ This plan evolves Daem0n-MCP from a "Reactive Semantic Engine" to a full "Cognit
 |----------|-----------|
 | SQLite stays for structured data | Memories, rules, relationships - relational data that benefits from ACID, migrations, joins |
 | Qdrant for vectors only | Embeddings move out of SQLite blobs; enables fast ANN search, metadata filtering, scalability |
-| Code understanding is separate layer | Indexes YOUR PROJECTS, not Daem0n itself. Links to memories via `code_refs` |
+| Code understanding is separate layer | Indexes YOUR PROJECTS, not Claude Memory itself. Links to memories via `code_refs` |
 | Three interface modes | Reactive (current MCP), Proactive (watcher), Sync (team sharing) |
 | Git-based sync first | Works with existing workflows; cloud sync can come later |
 
@@ -94,7 +94,7 @@ This plan evolves Daem0n-MCP from a "Reactive Semantic Engine" to a full "Cognit
 
 **Goal:** Replace SQLite blob storage with Qdrant without breaking anything.
 
-### New File: `daem0nmcp/qdrant_store.py`
+### New File: `claude_memory/qdrant_store.py`
 
 ```python
 from qdrant_client import QdrantClient
@@ -170,12 +170,12 @@ class QdrantVectorStore:
 ### Migration Script
 
 ```python
-# daem0nmcp/migrations/migrate_vectors.py
+# claude_memory/migrations/migrate_vectors.py
 
 async def migrate_vectors_to_qdrant(db: DatabaseManager, qdrant: QdrantVectorStore):
     """One-time migration of existing vectors from SQLite to Qdrant."""
-    from daem0nmcp.models import Memory
-    from daem0nmcp import vectors
+    from claude_memory.models import Memory
+    from claude_memory import vectors
     from sqlalchemy import select
 
     async with db.get_session() as session:
@@ -209,12 +209,12 @@ async def migrate_vectors_to_qdrant(db: DatabaseManager, qdrant: QdrantVectorSto
 | Task | Files | Notes |
 |------|-------|-------|
 | Add Qdrant dependency | `pyproject.toml` | `qdrant-client` |
-| Create `QdrantVectorStore` class | `daem0nmcp/qdrant_store.py` | New file |
-| Add Qdrant config options | `daem0nmcp/config.py` | Path, optional remote URL |
-| Modify `MemoryManager` to use Qdrant | `daem0nmcp/memory.py` | Replace `VectorIndex` calls |
-| Update `HybridSearch` | `daem0nmcp/vectors.py` | Use Qdrant for vector half |
-| Write migration script | `daem0nmcp/migrations/migrate_vectors.py` | One-time SQLite -> Qdrant |
-| Add Qdrant collection for code entities | `daem0nmcp/qdrant_store.py` | Prep for Phase 2 |
+| Create `QdrantVectorStore` class | `claude_memory/qdrant_store.py` | New file |
+| Add Qdrant config options | `claude_memory/config.py` | Path, optional remote URL |
+| Modify `MemoryManager` to use Qdrant | `claude_memory/memory.py` | Replace `VectorIndex` calls |
+| Update `HybridSearch` | `claude_memory/vectors.py` | Use Qdrant for vector half |
+| Write migration script | `claude_memory/migrations/migrate_vectors.py` | One-time SQLite -> Qdrant |
+| Add Qdrant collection for code entities | `claude_memory/qdrant_store.py` | Prep for Phase 2 |
 | Update tests | `tests/test_vectors.py` | Mock Qdrant or use local |
 
 ### Verification
@@ -227,7 +227,7 @@ async def migrate_vectors_to_qdrant(db: DatabaseManager, qdrant: QdrantVectorSto
 
 ## Phase 1: Proactive Layer
 
-**Goal:** Daem0n watches files and alerts before mistakes.
+**Goal:** Claude Memory watches files and alerts before mistakes.
 
 ### Research Findings: MCP Notifications
 
@@ -252,7 +252,7 @@ Given the limitations, we implement a **priority-ordered multi-channel approach*
 | 4 | MCP `notifications/` | **Future** - when clients support | Experimental |
 | 5 | Log file | **Audit trail** - last resort | Always works |
 
-### New File: `daem0nmcp/watcher.py`
+### New File: `claude_memory/watcher.py`
 
 ```python
 """
@@ -310,7 +310,7 @@ class DaemonWatcher(FileSystemEventHandler):
 
     async def _analyze_change(self, path: Path):
         """Core analysis: does this change violate any known patterns?"""
-        from daem0nmcp import vectors
+        from claude_memory import vectors
 
         relative_path = path.relative_to(self.project_path)
 
@@ -389,7 +389,7 @@ def start_watcher(project_path: str, memory_manager, qdrant_store) -> Observer:
 ### Notification Channels
 
 ```python
-# daem0nmcp/channels/mcp_notify.py
+# claude_memory/channels/mcp_notify.py
 
 class MCPNotificationChannel:
     """Send notifications via MCP protocol."""
@@ -409,7 +409,7 @@ class MCPNotificationChannel:
         )
 
 
-# daem0nmcp/channels/system_notify.py
+# claude_memory/channels/system_notify.py
 
 class SystemNotificationChannel:
     """Send system tray notifications via plyer."""
@@ -418,16 +418,16 @@ class SystemNotificationChannel:
         try:
             from plyer import notification as plyer_notify
             plyer_notify.notify(
-                title=f"Daem0n: {notification['level'].upper()}",
+                title=f"Claude Memory: {notification['level'].upper()}",
                 message=notification["message"],
-                app_name="Daem0n-MCP",
+                app_name="Claude Memory",
                 timeout=10
             )
         except ImportError:
             pass  # plyer not installed
 
 
-# daem0nmcp/channels/editor_poll.py
+# claude_memory/channels/editor_poll.py
 
 import json
 from pathlib import Path
@@ -460,7 +460,7 @@ class EditorPollChannel:
         self.alerts_path.write_text(json.dumps(alerts, indent=2))
 
 
-# daem0nmcp/channels/log_notify.py
+# claude_memory/channels/log_notify.py
 
 import logging
 
@@ -481,15 +481,15 @@ class LogNotificationChannel:
 
 | Task | Files | Notes |
 |------|-------|-------|
-| Create watcher daemon | `daem0nmcp/watcher.py` | New file |
-| Define notification protocol | `daem0nmcp/channels/__init__.py` | Abstract base |
-| MCP notification channel | `daem0nmcp/channels/mcp_notify.py` | Future - when clients support |
-| System notification channel | `daem0nmcp/channels/system_notify.py` | Primary alert channel |
-| Editor poll channel | `daem0nmcp/channels/editor_poll.py` | `.daem0n/alerts.json` |
-| Log file channel | `daem0nmcp/channels/log_notify.py` | Audit trail |
-| Enhance git hook integration | `daem0nmcp/hooks.py` | Pre-commit checks |
-| Add CLI command to start watcher | `daem0nmcp/cli.py` | `daem0n watch` |
-| Add watcher config | `daem0nmcp/config.py` | Patterns, debounce, channels |
+| Create watcher daemon | `claude_memory/watcher.py` | New file |
+| Define notification protocol | `claude_memory/channels/__init__.py` | Abstract base |
+| MCP notification channel | `claude_memory/channels/mcp_notify.py` | Future - when clients support |
+| System notification channel | `claude_memory/channels/system_notify.py` | Primary alert channel |
+| Editor poll channel | `claude_memory/channels/editor_poll.py` | `.daem0n/alerts.json` |
+| Log file channel | `claude_memory/channels/log_notify.py` | Audit trail |
+| Enhance git hook integration | `claude_memory/hooks.py` | Pre-commit checks |
+| Add CLI command to start watcher | `claude_memory/cli.py` | `daem0n watch` |
+| Add watcher config | `claude_memory/config.py` | Patterns, debounce, channels |
 | Integration tests | `tests/test_watcher.py` | New file |
 
 ### New CLI Commands
@@ -505,7 +505,7 @@ daem0n hook check               # Manual pre-commit check
 
 ## Phase 2: Code Understanding
 
-**Goal:** Daem0n understands project structure and can answer "what depends on X?"
+**Goal:** Claude Memory understands project structure and can answer "what depends on X?"
 
 ### Research Findings: Multi-Language Parsing
 
@@ -534,7 +534,7 @@ Python, TypeScript, JavaScript, Go, Rust, Java, C, C++, C#, Ruby, PHP, Swift, Ko
 ### New Models
 
 ```python
-# daem0nmcp/models.py (additions)
+# claude_memory/models.py (additions)
 
 class CodeEntity(Base):
     """
@@ -587,7 +587,7 @@ class MemoryCodeRef(Base):
 ### Code Indexer
 
 ```python
-# daem0nmcp/code_indexer.py
+# claude_memory/code_indexer.py
 
 import hashlib
 from pathlib import Path
@@ -702,7 +702,7 @@ class TreeSitterIndexer:
                 }
 
     def _make_entity(self, **kwargs):
-        from daem0nmcp.models import CodeEntity
+        from claude_memory.models import CodeEntity
         id_string = f"{kwargs['project_path']}:{kwargs['file_path']}:{kwargs['name']}:{kwargs['entity_type']}"
         entity_id = hashlib.sha256(id_string.encode()).hexdigest()[:16]
         return CodeEntity(id=entity_id, **kwargs)
@@ -725,8 +725,8 @@ class CodeIndexManager:
 
     async def index_project(self, project_path: str, patterns: list = None):
         """Full project index."""
-        from daem0nmcp import vectors
-        from daem0nmcp.models import CodeEntity
+        from claude_memory import vectors
+        from claude_memory.models import CodeEntity
         from sqlalchemy import delete
 
         project = Path(project_path)
@@ -801,17 +801,17 @@ async def find_code(query: str, project_path: str = None) -> dict:
 
 | Task | Files | Notes |
 |------|-------|-------|
-| Add `CodeEntity` model | `daem0nmcp/models.py` | New table |
-| Add `MemoryCodeRef` model | `daem0nmcp/models.py` | Link table |
-| Create migration | `daem0nmcp/migrations/` | New tables |
-| Tree-sitter multi-lang indexer | `daem0nmcp/code_indexer.py` | New file, uses `tree-sitter-languages` |
-| Language-specific queries | `daem0nmcp/code_indexer.py` | Python, TS, JS, Go, Rust, Java, etc. |
-| Code index manager | `daem0nmcp/code_indexer.py` | Orchestrates indexing |
-| Auto-link symbols in `remember` | `daem0nmcp/memory.py` | Parse backticks |
-| Add `analyze_impact` tool | `daem0nmcp/server.py` | New MCP tool |
-| Add `index_project` tool | `daem0nmcp/server.py` | New MCP tool |
-| Add `find_code` tool | `daem0nmcp/server.py` | Semantic code search |
-| CLI for indexing | `daem0nmcp/cli.py` | `daem0n index` |
+| Add `CodeEntity` model | `claude_memory/models.py` | New table |
+| Add `MemoryCodeRef` model | `claude_memory/models.py` | Link table |
+| Create migration | `claude_memory/migrations/` | New tables |
+| Tree-sitter multi-lang indexer | `claude_memory/code_indexer.py` | New file, uses `tree-sitter-languages` |
+| Language-specific queries | `claude_memory/code_indexer.py` | Python, TS, JS, Go, Rust, Java, etc. |
+| Code index manager | `claude_memory/code_indexer.py` | Orchestrates indexing |
+| Auto-link symbols in `remember` | `claude_memory/memory.py` | Parse backticks |
+| Add `analyze_impact` tool | `claude_memory/server.py` | New MCP tool |
+| Add `index_project` tool | `claude_memory/server.py` | New MCP tool |
+| Add `find_code` tool | `claude_memory/server.py` | Semantic code search |
+| CLI for indexing | `claude_memory/cli.py` | `daem0n index` |
 | Tests | `tests/test_code_indexer.py` | New file |
 
 ---
@@ -823,7 +823,7 @@ async def find_code(query: str, project_path: str = None) -> dict:
 ### Memory Visibility Model
 
 ```python
-# daem0nmcp/models.py (additions)
+# claude_memory/models.py (additions)
 
 class MemoryVisibility(str, Enum):
     PRIVATE = "private"      # Only on this machine
@@ -841,7 +841,7 @@ sync_hash = Column(String, nullable=True)     # Content hash for conflict detect
 ### Git-Based Sync
 
 ```python
-# daem0nmcp/sync/git_sync.py
+# claude_memory/sync/git_sync.py
 
 import yaml
 import hashlib
@@ -906,16 +906,16 @@ sync:
 
 | Task | Files | Notes |
 |------|-------|-------|
-| Add visibility field to Memory | `daem0nmcp/models.py` | + migration |
-| Add sync metadata fields | `daem0nmcp/models.py` | origin_id, etc. |
-| Create migration | `daem0nmcp/migrations/` | New columns |
-| Git sync manager | `daem0nmcp/sync/git_sync.py` | New file |
-| YAML export/import | `daem0nmcp/sync/git_sync.py` | Serialize memories |
-| Conflict detection | `daem0nmcp/sync/git_sync.py` | Hash comparison |
-| Add `sync_push` tool | `daem0nmcp/server.py` | Export to repo |
-| Add `sync_pull` tool | `daem0nmcp/server.py` | Import from repo |
-| Add sync config | `daem0nmcp/config.py` | Repo path, auto-sync |
-| CLI commands | `daem0nmcp/cli.py` | `daem0n sync` |
+| Add visibility field to Memory | `claude_memory/models.py` | + migration |
+| Add sync metadata fields | `claude_memory/models.py` | origin_id, etc. |
+| Create migration | `claude_memory/migrations/` | New columns |
+| Git sync manager | `claude_memory/sync/git_sync.py` | New file |
+| YAML export/import | `claude_memory/sync/git_sync.py` | Serialize memories |
+| Conflict detection | `claude_memory/sync/git_sync.py` | Hash comparison |
+| Add `sync_push` tool | `claude_memory/server.py` | Export to repo |
+| Add `sync_pull` tool | `claude_memory/server.py` | Import from repo |
+| Add sync config | `claude_memory/config.py` | Repo path, auto-sync |
+| CLI commands | `claude_memory/cli.py` | `daem0n sync` |
 | Tests | `tests/test_sync.py` | New file |
 
 ### New CLI Commands
@@ -954,7 +954,7 @@ Phases 1, 2, and 3 can be done in parallel after Phase 0, or in any order based 
 ## Final File Structure
 
 ```
-daem0nmcp/
+claude_memory/
 +-- __init__.py
 +-- __main__.py
 +-- server.py              # MCP server (enhanced)
@@ -1129,13 +1129,13 @@ These cover most use cases. Add local LLM when:
 
 The recommendation suggested replacing the custom memory system with Mem0. After analysis:
 
-| Feature | Daem0n-MCP (current) | Mem0 |
+| Feature | Claude Memory (current) | Mem0 |
 |---------|---------------------|------|
 | Memory categories | 4 types with different decay | Generic "memories" |
-| Sacred Covenant / Rules | Built-in enforcement | Not supported |
+| Protocol / Rules | Built-in enforcement | Not supported |
 | Graph relationships | `MemoryRelationship` table | Not supported |
 | Outcome tracking | `worked`/`failed` with boost | Not supported |
 | Decay logic | Configurable per-category | Generic decay |
 | Conflict detection | Semantic + polarity analysis | Basic dedup |
 
-**Conclusion:** Mem0 would require reimplementing most of Daem0n's features on top of it. Better to keep the domain-specific logic and just upgrade the vector storage to Qdrant.
+**Conclusion:** Mem0 would require reimplementing most of Claude Memory's features on top of it. Better to keep the domain-specific logic and just upgrade the vector storage to Qdrant.

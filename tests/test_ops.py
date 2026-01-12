@@ -11,8 +11,8 @@ class TestHealthTool:
     @pytest.mark.asyncio
     async def test_health_returns_version(self):
         """Verify health tool returns version info."""
-        from daem0nmcp import __version__
-        from daem0nmcp.server import health
+        from claude_memory import __version__
+        from claude_memory.server import health
 
         result = await health(project_path="/tmp/test")
 
@@ -25,7 +25,7 @@ class TestHealthTool:
         """Verify health tool returns memory statistics."""
         import tempfile
         import shutil
-        from daem0nmcp.server import health, _project_contexts
+        from claude_memory.server import health, _project_contexts
 
         temp_dir = tempfile.mkdtemp()
         try:
@@ -50,7 +50,7 @@ class TestExportImport:
         """Verify export returns proper JSON structure."""
         import tempfile
         import shutil
-        from daem0nmcp.server import export_data, get_project_context, _project_contexts
+        from claude_memory.server import export_data, get_project_context, _project_contexts
 
         temp_dir = tempfile.mkdtemp()
         try:
@@ -88,7 +88,7 @@ class TestExportImport:
         """Verify import restores exported data."""
         import tempfile
         import shutil
-        from daem0nmcp.server import export_data, import_data, get_project_context, _project_contexts
+        from claude_memory.server import export_data, import_data, get_project_context, _project_contexts
 
         temp_dir1 = tempfile.mkdtemp()
         temp_dir2 = tempfile.mkdtemp()
@@ -145,7 +145,7 @@ class TestMaintenanceTools:
         """Verify pinned memories don't decay."""
         import tempfile
         import shutil
-        from daem0nmcp.server import pin_memory, get_project_context, _project_contexts
+        from claude_memory.server import pin_memory, get_project_context, _project_contexts
 
         temp_dir = tempfile.mkdtemp()
         try:
@@ -179,7 +179,7 @@ class TestMaintenanceTools:
         """Verify prune removes old, low-relevance memories."""
         import tempfile
         import shutil
-        from daem0nmcp.server import prune_memories, get_project_context, _project_contexts
+        from claude_memory.server import prune_memories, get_project_context, _project_contexts
 
         temp_dir = tempfile.mkdtemp()
         try:

@@ -39,7 +39,7 @@ class TestQualifiedNames:
 
     def test_qualified_name_nested_class_method(self, temp_project, nested_python):
         """Nested method has fully qualified name."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         if not indexer.available:
@@ -55,7 +55,7 @@ class TestQualifiedNames:
 
     def test_qualified_name_top_level_function(self, temp_project, nested_python):
         """Top-level function has module-prefixed name."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         if not indexer.available:
@@ -74,7 +74,7 @@ class TestStableEntityIDs:
 
     def test_entity_id_stable_after_line_change(self, temp_project):
         """Adding lines should NOT change entity IDs."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         if not indexer.available:
@@ -102,7 +102,7 @@ class TestImportExtraction:
 
     def test_python_imports_extracted(self, temp_project):
         """Python imports should be extracted."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         if not indexer.available:

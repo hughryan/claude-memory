@@ -4,8 +4,8 @@ import pytest
 import tempfile
 import shutil
 
-from daem0nmcp.database import DatabaseManager
-from daem0nmcp.rules import RulesEngine
+from claude_memory.database import DatabaseManager
+from claude_memory.rules import RulesEngine
 
 
 @pytest.fixture
@@ -271,7 +271,7 @@ class TestRulesCaching:
     @pytest.mark.asyncio
     async def test_check_rules_cache_hit(self, rules_engine):
         """Test that identical check_rules calls use cache."""
-        from daem0nmcp.cache import get_rules_cache
+        from claude_memory.cache import get_rules_cache
 
         # Clear cache to start fresh
         get_rules_cache().clear()
@@ -304,7 +304,7 @@ class TestRulesCaching:
     @pytest.mark.asyncio
     async def test_check_rules_cache_invalidated_on_add(self, rules_engine):
         """Test that cache is cleared when new rule is added."""
-        from daem0nmcp.cache import get_rules_cache
+        from claude_memory.cache import get_rules_cache
 
         # Create initial rule
         await rules_engine.add_rule(
@@ -332,7 +332,7 @@ class TestRulesCaching:
     @pytest.mark.asyncio
     async def test_check_rules_cache_invalidated_on_delete(self, rules_engine):
         """Test that cache is cleared when rule is deleted."""
-        from daem0nmcp.cache import get_rules_cache
+        from claude_memory.cache import get_rules_cache
 
         # Create rule
         result = await rules_engine.add_rule(
@@ -356,7 +356,7 @@ class TestRulesCaching:
     @pytest.mark.asyncio
     async def test_check_rules_cache_invalidated_on_update_enabled(self, rules_engine):
         """Test that cache is cleared when rule enabled status changes."""
-        from daem0nmcp.cache import get_rules_cache
+        from claude_memory.cache import get_rules_cache
 
         # Create rule
         result = await rules_engine.add_rule(
