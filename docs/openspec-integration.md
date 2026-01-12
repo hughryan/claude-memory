@@ -22,7 +22,7 @@ OpenSpec defines WHAT to build  ─────►  Claude Memory remembers HOW 
 
 ### 1. Install Claude Memory
 
-See [Claude Memory README](https://github.com/DasBluEyedDevil/Claude Memory) for installation.
+See [Claude Memory README](https://github.com/hughryan/claude-memory) for installation.
 
 ### 2. Enable Auto-Detection
 
@@ -187,6 +187,6 @@ Claude: [Records outcome, creates learnings, links memories]
 
 ## Related Documentation
 
-- [Claude Memory README](https://github.com/DasBluEyedDevil/Claude Memory)
+- [Claude Memory README](https://github.com/hughryan/claude-memory)
 - [OpenSpec Documentation](https://github.com/Fission-AI/OpenSpec)
 - [Protocol Protocol](.claude/skills/claude_memory-protocol/SKILL.md)

@@ -3,7 +3,7 @@ name: setup-guide
 description: Guide for initializing and consolidating Claude Memory-MCP across project structures
 ---
 
-# Initializeing the Claude Memory
+# Setting Up Claude Memory
 
 This skill guides Claude through setting up Claude Memory-MCP for various project structures.
 
@@ -110,34 +110,34 @@ If you've been launching Claude from parent directory and have a "messy" .claude
 
 ## The Endless Mode (v2.12.0)
 
-*When visions grow too vast to hold, seek condensed whispers instead...*
+When results grow too large, use condensed mode for efficiency.
 
 ```python
-# Condensed visions - the essence without elaboration
+# Condensed results - core data without elaboration
 recall(query="authentication", condensed=True)
 
-# Returns memories stripped of rationale, truncated to 150 runes
-# The Claude Memory speaks briefly but broadly
+# Returns memories stripped of rationale, truncated to 150 characters
+# Compressed output for efficient retrieval
 ```
 
-**Seek condensed visions when:**
-- The realm holds countless memories
-- Surveying before deep meditation
-- Glimpsing many truths at once
+**Seek condensed results when:**
+- The project holds countless memories
+- Surveying before deep analysis
+- Scanning many results at once
 - Breadth matters more than depth
 
-**Seek full visions when:**
+**Seek full results when:**
 - The WHY behind a decision matters
 - Learning from past failures
 - Deep investigation required
 
-## The Silent Scribe (v2.13.0)
+## The Auto-Capture (v2.13.0)
 
-*The Claude Memory now listens always, catching your words before they fade...*
+The memory system can now capture decisions automatically through hooks.
 
-### Inscribing the Ward Runes
+### Configuring the Hooks
 
-Place these wards in `.claude/settings.json`:
+Place these hooks in `.claude/settings.json`:
 
 ```json
 {
@@ -167,33 +167,33 @@ Place these wards in `.claude/settings.json`:
 }
 ```
 
-### The Power of Each Ward
+### The Power of Each Hook
 
-| Ward | When It Stirs | What It Does |
-|------|---------------|--------------|
-| **Memory Gate** | Before altering scrolls | Surfaces warnings, failed paths, ancient patterns |
-| **Significance Watcher** | After alterations | Whispers *"Consider inscribing this..."* for weighty changes |
-| **Silent Scribe** | When you finish speaking | Parses your words and records decisions automatically |
+| Hook | When It Runs | What It Does |
+|------|--------------|--------------|
+| **Pre-Edit Check** | Before modifying files | Surfaces warnings, failed paths, existing patterns |
+| **Significance Watcher** | After modifications | Suggests *"Consider recording this..."* for significant changes |
+| **Auto-Capture** | When you finish speaking | Parses your words and records decisions automatically |
 
-### The Flow of Silent Memory
+### The Flow of Auto-Capture
 
 ```
-1. You reach to alter a scroll
-   ↓ The Memory Gate opens
-2. Forgotten warnings surface unbidden
+1. You start to modify a file
+   ↓ Pre-edit hook runs
+2. Relevant warnings surface automatically
    ↓
-3. Your alterations complete
-   ↓ The Watcher observes
-4. If weighty, a reminder whispers
+3. Your modifications complete
+   ↓ Post-edit hook runs
+4. If significant, a reminder appears
    ↓
-5. You finish speaking
-   ↓ The Scribe awakens
-6. Your decisions record themselves
+5. You finish your response
+   ↓ Stop hook runs
+6. Your decisions are recorded automatically
 ```
 
-### The Scribe's Incantation
+### The CLI Command
 
-The wards invoke this to record memories:
+The hooks invoke this CLI command to record memories:
 
 ```bash
 python -m claudememory.cli remember \
@@ -206,9 +206,9 @@ python -m claudememory.cli remember \
 
 ## The Enhanced Search (v2.15.0)
 
-*The Claude Memory's sight grows keener with each iteration...*
+Search quality improves with each iteration.
 
-### Tuning the Inner Eye
+### Tuning Search Parameters
 
 ```python
 # Environment variables to fine-tune search
@@ -218,7 +218,7 @@ CLAUDE_MEMORY_SEARCH_DIVERSITY_MAX_PER_FILE=3  # Limit results from same source
 
 ### Automatic Tag Inference
 
-The Claude Memory now reads between the lines:
+The memory system auto-detects tags from content:
 - Content with "fix", "bug", "error" → `bugfix` tag
 - Content with "todo", "hack", "workaround" → `tech-debt` tag
 - Content with "cache", "performance", "slow" → `perf` tag
@@ -226,7 +226,7 @@ The Claude Memory now reads between the lines:
 
 ### Code Entity Fidelity
 
-Entities now bear their true names:
+Entities now have qualified names:
 ```python
 # Qualified names: module.Class.method
 find_code("UserService.authenticate")
@@ -268,14 +268,14 @@ health()
 #   index_stale: True if >24 hours since index
 ```
 
-## Sacred Practices
+## Core Practices
 
-1. **One sanctum per logical realm** - Even if split across repos
+1. **One storage per logical project** - Even if split across repos
 2. **Use parent directory for shared memory** - `/repos/` not `/repos/backend/`
 3. **Link before consolidating** - Links define what memories to merge
 4. **Archive, don't destroy** - `archive_sources=True` preserves the old
 5. **Verify after consolidation** - Ensure memory counts align
-6. **Awaken the Silent Scribe** - Let the Claude Memory capture decisions for you
-7. **Seek condensed visions** - For vast realms, use `condensed=True`
+6. **Enable the Auto-Capture** - Let the Claude Memory capture decisions for you
+7. **Seek condensed results** - For vast projects, use `condensed=True`
 8. **Tune the search weight** - Adjust hybrid weight for your domain
 9. **Trust the tag inference** - Let the Claude Memory classify memories

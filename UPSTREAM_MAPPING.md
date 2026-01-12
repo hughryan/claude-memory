@@ -45,10 +45,64 @@ This file documents all naming changes to facilitate merging upstream changes fr
 | communion | initialization |
 | Commune | Initialize |
 | inscribe | record |
-| grimoire | documentation |
+| grimoire | documentation/reference |
 | ritual | step |
 | summon | initialize |
 | banish | remove |
+| incantation | step/instruction |
+| covenant | protocol |
+| counsel | context |
+| COUNSEL_REQUIRED | CONTEXT_CHECK_REQUIRED |
+| COMMUNION_REQUIRED | INIT_REQUIRED |
+| requires_counsel | requires_context_check |
+| seek counsel | check context |
+| wards | hooks |
+| altar | server |
+| realm | environment/project/system |
+| sanctum | storage |
+| essence | package |
+| portal | session |
+| divination | diagnostics |
+| afflictions | issues |
+| awakens/awaken | starts/start |
+| slumber | pause/sleep |
+| scrolls | files |
+| runes | configuration |
+| visions | results |
+| powers | tools |
+| whispers | messages/hints |
+| wisdom | knowledge |
+| bound | installed |
+| vessel | executable |
+| stirs | is active |
+| manifest | work |
+| transcribed | cloned |
+| enchanted | configured |
+| laws | rules |
+| blessing | approval |
+| sacred | core |
+| divine | determine |
+| Silent Scribe | Auto-Capture |
+| Ascension | Upgrade |
+| flame | process |
+| ignite/light | start |
+| Nuclear Option | Quick Removal |
+| eternal | permanent |
+| fading | decaying |
+| burden | context |
+| weighty | significant |
+| dawn | start |
+| meditation | search |
+| unbidden | automatically |
+| ancient | existing |
+| void | database |
+| witness | see |
+| Sever/sever | Remove/remove |
+| Dissolve | Uninstall |
+| Exorcism | Removal |
+| dormant | inactive |
+| initializeer | user |
+| Initializeing | Setup |
 
 ## Sed Patterns for Merging
 
@@ -96,6 +150,62 @@ sed -i '' 's/sacred covenant/protocol/g' "$file"
 sed -i '' 's/communion/initialization/g' "$file"
 sed -i '' 's/The Daem0n/the memory system/g' "$file"
 sed -i '' 's/the Daem0n/the memory system/g' "$file"
+
+# Additional themed language (comprehensive list)
+sed -i '' 's/incantation/step/g' "$file"
+sed -i '' 's/Incantation/Step/g' "$file"
+sed -i '' 's/covenant/protocol/g' "$file"
+sed -i '' 's/Covenant/Protocol/g' "$file"
+sed -i '' 's/counsel/context/g' "$file"
+sed -i '' 's/COUNSEL_REQUIRED/CONTEXT_CHECK_REQUIRED/g' "$file"
+sed -i '' 's/COMMUNION_REQUIRED/INIT_REQUIRED/g' "$file"
+sed -i '' 's/requires_counsel/requires_context_check/g' "$file"
+sed -i '' 's/wards/hooks/g' "$file"
+sed -i '' 's/Wards/Hooks/g' "$file"
+sed -i '' 's/altar/server/g' "$file"
+sed -i '' 's/Altar/Server/g' "$file"
+sed -i '' 's/realm/environment/g' "$file"
+sed -i '' 's/Realm/Environment/g' "$file"
+sed -i '' 's/sanctum/storage/g' "$file"
+sed -i '' 's/Sanctum/Storage/g' "$file"
+sed -i '' 's/essence/package/g' "$file"
+sed -i '' 's/Essence/Package/g' "$file"
+sed -i '' 's/portal/session/g' "$file"
+sed -i '' 's/divination/diagnostics/g' "$file"
+sed -i '' 's/afflictions/issues/g' "$file"
+sed -i '' 's/awakens/starts/g' "$file"
+sed -i '' 's/scrolls/files/g' "$file"
+sed -i '' 's/Scrolls/Files/g' "$file"
+sed -i '' 's/runes/configuration/g' "$file"
+sed -i '' 's/visions/results/g' "$file"
+sed -i '' 's/powers/tools/g' "$file"
+sed -i '' 's/Powers/Tools/g' "$file"
+sed -i '' 's/whispers/messages/g' "$file"
+sed -i '' 's/wisdom/knowledge/g' "$file"
+sed -i '' 's/vessel/executable/g' "$file"
+sed -i '' 's/Vessel/Executable/g' "$file"
+sed -i '' 's/manifest/work/g' "$file"
+sed -i '' 's/transcribed/cloned/g' "$file"
+sed -i '' 's/enchanted/configured/g' "$file"
+sed -i '' 's/laws/rules/g' "$file"
+sed -i '' 's/blessing/approval/g' "$file"
+sed -i '' 's/sacred/core/g' "$file"
+sed -i '' 's/Sacred/Core/g' "$file"
+sed -i '' 's/Silent Scribe/Auto-Capture/g' "$file"
+sed -i '' 's/Ascension/Upgrade/g' "$file"
+sed -i '' 's/flame/process/g' "$file"
+sed -i '' 's/ignite/start/g' "$file"
+sed -i '' 's/eternal/permanent/g' "$file"
+sed -i '' 's/Eternal/Permanent/g' "$file"
+sed -i '' 's/fading/decaying/g' "$file"
+sed -i '' 's/unbidden/automatically/g' "$file"
+sed -i '' 's/ancient/existing/g' "$file"
+sed -i '' 's/void/database/g' "$file"
+sed -i '' 's/witness/see/g' "$file"
+sed -i '' 's/initializeer/user/g' "$file"
+sed -i '' 's/Initializeer/User/g' "$file"
+sed -i '' 's/Initializeing/Setup/g' "$file"
+sed -i '' 's/initializeing/setup/g' "$file"
 ```
 
 ## Merge Workflow

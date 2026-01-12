@@ -1,9 +1,9 @@
 ---
 name: claudememory-protocol
-description: Use when Claude Memory tools are available - enforces the protocol (initialize at session start, seek counsel before changes, record decisions, seal outcomes)
+description: Use when Claude Memory tools are available - enforces the protocol (initialize at session start, check context before changes, record decisions, track outcomes)
 ---
 
-# The Claude Memory's Protocol
+# The Claude Memory Protocol
 
 ## Overview
 
@@ -136,14 +136,14 @@ The Protocol is now ENFORCED, not advisory:
 
 ### What Happens If You Skip Steps
 
-1. **Skip get_briefing()**: ALL tools return `COMMUNION_REQUIRED` block
-2. **Skip context_check()**: Mutating tools return `COUNSEL_REQUIRED` block
+1. **Skip get_briefing()**: ALL tools return `INIT_REQUIRED` block
+2. **Skip context_check()**: Mutating tools return `CONTEXT_CHECK_REQUIRED` block
 3. **Each block includes a `remedy`**: The exact tool call to fix it
 
 ### Enforcement Decorators
 
 Tools are classified:
-- **@requires_counsel**: remember, remember_batch, add_rule, update_rule, prune_memories, cleanup_memories, compact_memories, export_data, import_data, ingest_doc
+- **@requires_context_check**: remember, remember_batch, add_rule, update_rule, prune_memories, cleanup_memories, compact_memories, export_data, import_data, ingest_doc
 - **@requires_initialization**: All other tools except get_briefing and health
 - **Exempt**: get_briefing, health
 

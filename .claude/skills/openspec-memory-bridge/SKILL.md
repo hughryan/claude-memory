@@ -274,12 +274,12 @@ If results exist with recent timestamps, skip import.
 
 ## Integration with Protocol
 
-This skill respects the Claude Memory's Protocol:
+This skill respects the Claude Memory Protocol:
 
-1. **COMMUNE** - `get_briefing()` must be called first (auto-detection happens after)
-2. **SEEK COUNSEL** - Workflow 2 IS the counsel-seeking step for proposals
-3. **INSCRIBE** - `remember()` records proposal decisions
-4. **SEAL** - `record_outcome()` closes the loop when changes are archived
+1. **INITIALIZE** - `get_briefing()` must be called first (auto-detection happens after)
+2. **CHECK CONTEXT** - Workflow 2 IS the context-checking step for proposals
+3. **RECORD** - `remember()` records proposal decisions
+4. **TRACK** - `record_outcome()` closes the loop when changes are archived
 
 **Enforcement:**
 - Workflow 1 (Import) requires initialization (get_briefing called)

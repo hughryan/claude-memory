@@ -1,14 +1,17 @@
 # Claude Memory
 
 ```
-        ,     ,
-       /(     )\
-      |  \   /  |      "I am Claude Memory, keeper of memories,
-       \  \ /  /        guardian of decisions past..."
-        \  Y  /
-         \ | /
-          \|/
-           *
+    ┌─────────────────────────────────────┐
+    │  ╔═╗╦  ╔═╗╦ ╦╔╦╗╔═╗                 │
+    │  ║  ║  ╠═╣║ ║ ║║║╣                  │
+    │  ╚═╝╩═╝╩ ╩╚═╝═╩╝╚═╝                 │
+    │  ╔╦╗╔═╗╔╦╗╔═╗╦═╗╦ ╦                 │
+    │  ║║║║╣ ║║║║ ║╠╦╝╚╦╝                 │
+    │  ╩ ╩╚═╝╩ ╩╚═╝╩╚═ ╩                  │
+    │                                     │
+    │  "Your AI development companion     │
+    │   with perfect recall."             │
+    └─────────────────────────────────────┘
 ```
 
 **AI Memory & Decision System** - Give AI agents persistent memory and consistent decision-making with *actual* semantic understanding.
@@ -18,8 +21,8 @@
 ### Protocol Enforcement
 The Protocol is now **enforced**, not just advisory:
 
-- **`requires_initialization`**: Tools block with `COMMUNION_REQUIRED` until `get_briefing()` is called
-- **`requires_counsel`**: Mutating tools block with `COUNSEL_REQUIRED` until `context_check()` is called
+- **`requires_init`**: Tools block with `INIT_REQUIRED` until `get_briefing()` is called
+- **`requires_context_check`**: Mutating tools block with `CONTEXT_CHECK_REQUIRED` until `context_check()` is called
 - **Preflight tokens**: `context_check()` returns a cryptographic token valid for 5 minutes
 - **Remedies**: Each block includes the exact tool call needed to fix it
 
@@ -190,7 +193,7 @@ Auto-recall memories without explicit calls based on context patterns:
 
 ### Previous Features (v2.5.0)
 - **Windows HTTP Transport**: Full Windows support via streamable-http (bypasses stdio bugs)
-- **Step-Themed Installation**: `Initialize_Claude Memory.md` and `Remove_Claude Memory.md` for fun
+- **Step-Themed Installation**: `Setup.md` and `Uninstall.md` for fun
 - **Claude Code Hooks**: Auto-reminders to use memory tools
 - **Protocol Skill**: `claude_memory-protocol` skill for Superpowers users
 
@@ -225,24 +228,24 @@ Unlike keyword-based systems:
 
 ### The Easy Way (Recommended)
 
-1. Copy `Initialize_Claude Memory.md` to your project
+1. Copy `Setup.md` to your project
 2. Start a Claude Code session in that project
-3. Claude will read the file and perform the initializeing step automatically
+3. Claude will read the file and perform the setup process automatically
 
 ### Manual Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/DasBluEyedDevil/Claude Memory.git ~/Claude Memory
+git clone https://github.com/hughryan/claude-memory.git ~/claude-memory
 
 # Install
-pip install -e ~/Claude Memory
+pip install -e ~/claude-memory
 
 # Run the MCP server (Linux/macOS)
 python -m claude_memory.server
 
 # Run the MCP server (Windows - use HTTP transport)
-python ~/Claude Memory/start_server.py --port 9876
+python ~/claude-memory/start_server.py --port 9876
 ```
 
 ## Installation by Platform
@@ -265,7 +268,7 @@ Windows has a known bug where Python MCP servers using stdio transport hang inde
 
 1. **Start the server** (keep this terminal open):
 ```bash
-python ~/Claude Memory/start_server.py --port 9876
+python ~/claude-memory/start_server.py --port 9876
 ```
 Or use `start_claude_memory_server.bat`
 
@@ -454,7 +457,7 @@ AFTER IMPLEMENTATION
     └─> record_outcome(memory_id, outcome, worked)
 ```
 
-See `Initialize_Claude Memory.md` for the complete protocol (with step theme for fun).
+See `Setup.md` for the complete protocol (with theme for fun).
 
 ## Claude Code Integration
 
@@ -556,7 +559,7 @@ Each project gets isolated storage at:
 ```
 
 ### Legacy Migration
-If upgrading from DevilMCP, data is automatically migrated from `.devilmcp/` to `.claude_memory/`.
+If upgrading from a previous installation, data is automatically migrated to `.claude_memory/`.
 
 ## Configuration
 
@@ -577,7 +580,7 @@ claude_memory/
 ├── rules.py        # Rule engine with TF-IDF matching
 ├── similarity.py   # TF-IDF index, decay, conflict detection
 ├── vectors.py      # Vector embeddings (sentence-transformers)
-├── covenant.py     # Protocol enforcement decorators & preflight tokens
+├── protocol.py     # Protocol enforcement decorators & preflight tokens
 ├── code_indexer.py # Code understanding via tree-sitter (Phase 2)
 ├── watcher.py      # Proactive file watcher daemon (Phase 1)
 ├── database.py     # SQLite async database
@@ -595,8 +598,8 @@ claude_memory/
     └── claude_memory-protocol/
         └── SKILL.md   # Protocol enforcement skill
 
-Initialize_Claude Memory.md   # Installation instructions (step theme)
-Remove_Claude Memory.md   # Uninstallation instructions
+Setup.md   # Installation instructions (theme)
+Uninstall.md   # Uninstallation instructions
 start_server.py    # HTTP server launcher (Windows)
 ```
 
@@ -648,7 +651,7 @@ Upgrading Claude Memory is straightforward:
 
 ```bash
 # If installed from source (recommended)
-cd ~/Claude Memory && git pull && pip install -e .
+cd ~/claude-memory && git pull && pip install -e .
 
 # If installed via pip
 pip install --upgrade claude_memory
@@ -703,7 +706,7 @@ This parses your code with tree-sitter (supports Python, TypeScript, JavaScript,
 1. **Start server before Claude Code:**
    ```bash
    # Terminal 1: Start Claude Memory server first
-   python ~/Claude Memory/start_server.py --port 9876
+   python ~/claude-memory/start_server.py --port 9876
 
    # Wait for "Uvicorn running on http://localhost:9876"
 
@@ -746,15 +749,9 @@ python -m claude_memory.server
 python start_server.py --port 9876
 ```
 
-## Support
-
-If Claude Memory has been useful to you, consider supporting its development:
-
-[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/vitruvianredux)
-
 ## Uninstallation
 
-See `Remove_Claude Memory.md` for complete removal instructions, or quick version:
+See `Uninstall.md` for complete removal instructions, or quick version:
 
 ```bash
 # Remove MCP registration
@@ -764,7 +761,7 @@ claude mcp remove claude_memory --scope user
 pip uninstall claude_memory
 
 # Remove repository
-rm -rf ~/Claude Memory
+rm -rf ~/claude-memory
 
 # Remove project data (optional)
 rm -rf .claude_memory/
@@ -772,10 +769,6 @@ rm -rf .claude_memory/
 
 ---
 
-```
-    "The system learns from YOUR outcomes.
-     Record them faithfully..."
-                              ~ Claude Memory
-```
+*Claude Memory v2.16.0: Protocol Enforcement, preflight tokens, MCP Resources for dynamic context injection, Claude Code 2.1.3 compatibility.*
 
-*Claude Memory v2.16.0: Protocol Enforcement—rigid enforcement decorators, preflight tokens, MCP Resources for dynamic context injection, Claude Code 2.1.3 compatibility.*
+*Originally forked from [Daem0n-MCP](https://github.com/DasBluEyedDevil/Daem0n-MCP) by DasBluEyedDevil.*
