@@ -143,13 +143,13 @@ class TestTreeSitterIndexer:
 
     def test_is_available(self):
         """Test availability check."""
-        from daem0nmcp.code_indexer import is_available
+        from claude_memory.code_indexer import is_available
         # tree-sitter-languages is a required dependency
         assert is_available() is True
 
     def test_get_supported_extensions(self):
         """Test getting supported extensions."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         extensions = indexer.get_supported_extensions()
@@ -162,7 +162,7 @@ class TestTreeSitterIndexer:
 
     def test_index_python_file(self, temp_project):
         """Test indexing a Python file."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         py_file = temp_project / "sample.py"
@@ -183,7 +183,7 @@ class TestTreeSitterIndexer:
 
     def test_index_typescript_file(self, temp_project):
         """Test indexing a TypeScript file."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         ts_file = temp_project / "service.ts"
@@ -197,7 +197,7 @@ class TestTreeSitterIndexer:
 
     def test_index_javascript_file(self, temp_project):
         """Test indexing a JavaScript file."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         js_file = temp_project / "utils.js"
@@ -210,7 +210,7 @@ class TestTreeSitterIndexer:
 
     def test_index_go_file(self, temp_project):
         """Test indexing a Go file."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         go_file = temp_project / "main.go"
@@ -224,7 +224,7 @@ class TestTreeSitterIndexer:
 
     def test_index_rust_file(self, temp_project):
         """Test indexing a Rust file."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         rs_file = temp_project / "lib.rs"
@@ -238,7 +238,7 @@ class TestTreeSitterIndexer:
 
     def test_entity_has_required_fields(self, temp_project):
         """Test that entities have all required fields."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         py_file = temp_project / "sample.py"
@@ -257,7 +257,7 @@ class TestTreeSitterIndexer:
 
     def test_entity_id_is_deterministic(self, temp_project):
         """Test that entity IDs are deterministic."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         py_file = temp_project / "sample.py"
@@ -272,7 +272,7 @@ class TestTreeSitterIndexer:
 
     def test_skip_unsupported_files(self, temp_project):
         """Test that unsupported files are skipped."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
 
@@ -285,7 +285,7 @@ class TestTreeSitterIndexer:
 
     def test_extract_docstrings(self, temp_project):
         """Test that docstrings are extracted when available."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         py_file = temp_project / "sample.py"
@@ -301,7 +301,7 @@ class TestTreeSitterIndexer:
 
     def test_extract_signature(self, temp_project):
         """Test that signatures are extracted."""
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         py_file = temp_project / "sample.py"
@@ -320,9 +320,9 @@ class TestCodeIndexManager:
     @pytest.fixture
     async def db_manager(self, temp_project):
         """Create a database manager for testing."""
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
 
-        db = DatabaseManager(str(temp_project / ".daem0nmcp" / "storage"))
+        db = DatabaseManager(str(temp_project / ".claude-memory" / "storage"))
         await db.init_db()
         yield db
         await db.close()
@@ -330,7 +330,7 @@ class TestCodeIndexManager:
     @pytest.mark.asyncio
     async def test_index_project(self, temp_project, db_manager):
         """Test indexing an entire project."""
-        from daem0nmcp.code_indexer import CodeIndexManager
+        from claude_memory.code_indexer import CodeIndexManager
 
         indexer = CodeIndexManager(db=db_manager, qdrant=None)
         result = await indexer.index_project(str(temp_project))
@@ -342,7 +342,7 @@ class TestCodeIndexManager:
     @pytest.mark.asyncio
     async def test_index_with_patterns(self, temp_project, db_manager):
         """Test indexing with specific patterns."""
-        from daem0nmcp.code_indexer import CodeIndexManager
+        from claude_memory.code_indexer import CodeIndexManager
 
         indexer = CodeIndexManager(db=db_manager, qdrant=None)
 
@@ -355,7 +355,7 @@ class TestCodeIndexManager:
     @pytest.mark.asyncio
     async def test_find_entity(self, temp_project, db_manager):
         """Test finding a specific entity."""
-        from daem0nmcp.code_indexer import CodeIndexManager
+        from claude_memory.code_indexer import CodeIndexManager
 
         indexer = CodeIndexManager(db=db_manager, qdrant=None)
         await indexer.index_project(str(temp_project))
@@ -368,7 +368,7 @@ class TestCodeIndexManager:
     @pytest.mark.asyncio
     async def test_find_entity_not_found(self, temp_project, db_manager):
         """Test finding a non-existent entity."""
-        from daem0nmcp.code_indexer import CodeIndexManager
+        from claude_memory.code_indexer import CodeIndexManager
 
         indexer = CodeIndexManager(db=db_manager, qdrant=None)
         await indexer.index_project(str(temp_project))
@@ -379,7 +379,7 @@ class TestCodeIndexManager:
     @pytest.mark.asyncio
     async def test_analyze_impact(self, temp_project, db_manager):
         """Test impact analysis."""
-        from daem0nmcp.code_indexer import CodeIndexManager
+        from claude_memory.code_indexer import CodeIndexManager
 
         indexer = CodeIndexManager(db=db_manager, qdrant=None)
         await indexer.index_project(str(temp_project))
@@ -391,7 +391,7 @@ class TestCodeIndexManager:
     @pytest.mark.asyncio
     async def test_analyze_impact_not_found(self, temp_project, db_manager):
         """Test impact analysis for non-existent entity."""
-        from daem0nmcp.code_indexer import CodeIndexManager
+        from claude_memory.code_indexer import CodeIndexManager
 
         indexer = CodeIndexManager(db=db_manager, qdrant=None)
         await indexer.index_project(str(temp_project))
@@ -402,7 +402,7 @@ class TestCodeIndexManager:
     @pytest.mark.asyncio
     async def test_skip_directories(self, temp_project, db_manager):
         """Test that certain directories are skipped."""
-        from daem0nmcp.code_indexer import CodeIndexManager
+        from claude_memory.code_indexer import CodeIndexManager
 
         # Create a node_modules directory with a file
         node_modules = temp_project / "node_modules" / "some_package"
@@ -418,8 +418,8 @@ class TestCodeIndexManager:
     @pytest.mark.asyncio
     async def test_reindex_clears_old_entities(self, temp_project, db_manager):
         """Test that reindexing clears old entities."""
-        from daem0nmcp.code_indexer import CodeIndexManager
-        from daem0nmcp.models import CodeEntity
+        from claude_memory.code_indexer import CodeIndexManager
+        from claude_memory.models import CodeEntity
         from sqlalchemy import select
 
         indexer = CodeIndexManager(db=db_manager, qdrant=None)
@@ -449,30 +449,30 @@ class TestLanguageQueries:
 
     def test_python_queries_exist(self):
         """Test that Python queries are defined."""
-        from daem0nmcp.code_indexer import ENTITY_QUERIES
+        from claude_memory.code_indexer import ENTITY_QUERIES
         assert 'python' in ENTITY_QUERIES
         assert 'class_definition' in ENTITY_QUERIES['python']
         assert 'function_definition' in ENTITY_QUERIES['python']
 
     def test_typescript_queries_exist(self):
         """Test that TypeScript queries are defined."""
-        from daem0nmcp.code_indexer import ENTITY_QUERIES
+        from claude_memory.code_indexer import ENTITY_QUERIES
         assert 'typescript' in ENTITY_QUERIES
         assert 'class_declaration' in ENTITY_QUERIES['typescript']
 
     def test_javascript_queries_exist(self):
         """Test that JavaScript queries are defined."""
-        from daem0nmcp.code_indexer import ENTITY_QUERIES
+        from claude_memory.code_indexer import ENTITY_QUERIES
         assert 'javascript' in ENTITY_QUERIES
 
     def test_go_queries_exist(self):
         """Test that Go queries are defined."""
-        from daem0nmcp.code_indexer import ENTITY_QUERIES
+        from claude_memory.code_indexer import ENTITY_QUERIES
         assert 'go' in ENTITY_QUERIES
 
     def test_rust_queries_exist(self):
         """Test that Rust queries are defined."""
-        from daem0nmcp.code_indexer import ENTITY_QUERIES
+        from claude_memory.code_indexer import ENTITY_QUERIES
         assert 'rust' in ENTITY_QUERIES
         assert 'struct_item' in ENTITY_QUERIES['rust']
         assert 'function_item' in ENTITY_QUERIES['rust']
@@ -483,40 +483,40 @@ class TestLanguageConfig:
 
     def test_python_extension(self):
         """Test Python extension mapping."""
-        from daem0nmcp.code_indexer import LANGUAGE_CONFIG
+        from claude_memory.code_indexer import LANGUAGE_CONFIG
         assert LANGUAGE_CONFIG['.py'] == 'python'
 
     def test_typescript_extensions(self):
         """Test TypeScript extension mappings."""
-        from daem0nmcp.code_indexer import LANGUAGE_CONFIG
+        from claude_memory.code_indexer import LANGUAGE_CONFIG
         assert LANGUAGE_CONFIG['.ts'] == 'typescript'
         assert LANGUAGE_CONFIG['.tsx'] == 'tsx'
 
     def test_javascript_extensions(self):
         """Test JavaScript extension mappings."""
-        from daem0nmcp.code_indexer import LANGUAGE_CONFIG
+        from claude_memory.code_indexer import LANGUAGE_CONFIG
         assert LANGUAGE_CONFIG['.js'] == 'javascript'
         assert LANGUAGE_CONFIG['.mjs'] == 'javascript'
 
     def test_go_extension(self):
         """Test Go extension mapping."""
-        from daem0nmcp.code_indexer import LANGUAGE_CONFIG
+        from claude_memory.code_indexer import LANGUAGE_CONFIG
         assert LANGUAGE_CONFIG['.go'] == 'go'
 
     def test_rust_extension(self):
         """Test Rust extension mapping."""
-        from daem0nmcp.code_indexer import LANGUAGE_CONFIG
+        from claude_memory.code_indexer import LANGUAGE_CONFIG
         assert LANGUAGE_CONFIG['.rs'] == 'rust'
 
     def test_c_extensions(self):
         """Test C extension mappings."""
-        from daem0nmcp.code_indexer import LANGUAGE_CONFIG
+        from claude_memory.code_indexer import LANGUAGE_CONFIG
         assert LANGUAGE_CONFIG['.c'] == 'c'
         assert LANGUAGE_CONFIG['.h'] == 'c'
 
     def test_cpp_extensions(self):
         """Test C++ extension mappings."""
-        from daem0nmcp.code_indexer import LANGUAGE_CONFIG
+        from claude_memory.code_indexer import LANGUAGE_CONFIG
         assert LANGUAGE_CONFIG['.cpp'] == 'cpp'
         assert LANGUAGE_CONFIG['.hpp'] == 'cpp'
 
@@ -527,11 +527,11 @@ class TestCodeEntityModel:
     @pytest.fixture
     async def db_manager(self):
         """Create a database manager for testing."""
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
         import tempfile
 
         temp_dir = Path(tempfile.mkdtemp())
-        db = DatabaseManager(str(temp_dir / ".daem0nmcp" / "storage"))
+        db = DatabaseManager(str(temp_dir / ".claude-memory" / "storage"))
         await db.init_db()
         yield db
         await db.close()
@@ -540,7 +540,7 @@ class TestCodeEntityModel:
     @pytest.mark.asyncio
     async def test_create_code_entity(self, db_manager):
         """Test creating a CodeEntity."""
-        from daem0nmcp.models import CodeEntity
+        from claude_memory.models import CodeEntity
 
         async with db_manager.get_session() as session:
             entity = CodeEntity(
@@ -575,11 +575,11 @@ class TestMemoryCodeRefModel:
     @pytest.fixture
     async def db_manager(self):
         """Create a database manager for testing."""
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
         import tempfile
 
         temp_dir = Path(tempfile.mkdtemp())
-        db = DatabaseManager(str(temp_dir / ".daem0nmcp" / "storage"))
+        db = DatabaseManager(str(temp_dir / ".claude-memory" / "storage"))
         await db.init_db()
         yield db
         await db.close()
@@ -588,7 +588,7 @@ class TestMemoryCodeRefModel:
     @pytest.mark.asyncio
     async def test_create_memory_code_ref(self, db_manager):
         """Test creating a MemoryCodeRef."""
-        from daem0nmcp.models import Memory, MemoryCodeRef
+        from claude_memory.models import Memory, MemoryCodeRef
 
         async with db_manager.get_session() as session:
             # First create a memory

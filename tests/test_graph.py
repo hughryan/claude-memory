@@ -4,8 +4,8 @@ import pytest
 import tempfile
 import shutil
 
-from daem0nmcp.database import DatabaseManager
-from daem0nmcp.memory import MemoryManager
+from claude_memory.database import DatabaseManager
+from claude_memory.memory import MemoryManager
 
 
 @pytest.fixture

@@ -9,14 +9,14 @@ class TestProjectLinkModel:
 
     def test_project_link_model_exists(self):
         """ProjectLink model should be importable."""
-        from daem0nmcp.models import ProjectLink
+        from claude_memory.models import ProjectLink
 
         assert hasattr(ProjectLink, '__tablename__')
         assert ProjectLink.__tablename__ == "project_links"
 
     def test_project_link_has_required_fields(self):
         """ProjectLink should have source_path, linked_path, relationship."""
-        from daem0nmcp.models import ProjectLink
+        from claude_memory.models import ProjectLink
 
         # Check columns exist
         columns = {c.name for c in ProjectLink.__table__.columns}
@@ -32,7 +32,7 @@ class TestProjectLinkMigration:
 
     @pytest.fixture
     def db_manager(self, tmp_path):
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
         return DatabaseManager(str(tmp_path / "storage"))
 
     @pytest.mark.asyncio
@@ -57,12 +57,12 @@ class TestLinkManager:
 
     @pytest.fixture
     def db_manager(self, tmp_path):
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
         return DatabaseManager(str(tmp_path / "storage"))
 
     @pytest.fixture
     def link_manager(self, db_manager):
-        from daem0nmcp.links import LinkManager
+        from claude_memory.links import LinkManager
         return LinkManager(db_manager)
 
     @pytest.mark.asyncio
@@ -124,7 +124,7 @@ class TestLinkTools:
 
     @pytest.fixture
     def db_manager(self, tmp_path):
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
         return DatabaseManager(str(tmp_path / "storage"))
 
     @pytest.mark.asyncio
@@ -132,7 +132,7 @@ class TestLinkTools:
         """link_projects MCP tool should create a link."""
         await db_manager.init_db()
 
-        from daem0nmcp import server
+        from claude_memory import server
         server._project_contexts.clear()
 
         project_path = str(db_manager.storage_path.parent.parent)
@@ -153,7 +153,7 @@ class TestLinkTools:
         """list_linked_projects MCP tool should return links."""
         await db_manager.init_db()
 
-        from daem0nmcp import server
+        from claude_memory import server
         server._project_contexts.clear()
 
         project_path = str(db_manager.storage_path.parent.parent)
@@ -175,7 +175,7 @@ class TestLinkTools:
         """unlink_projects MCP tool should remove a link."""
         await db_manager.init_db()
 
-        from daem0nmcp import server
+        from claude_memory import server
         server._project_contexts.clear()
 
         project_path = str(db_manager.storage_path.parent.parent)
@@ -200,14 +200,14 @@ class TestCrossProjectRecall:
 
     @pytest.fixture
     def backend_db(self, tmp_path):
-        from daem0nmcp.database import DatabaseManager
-        db = DatabaseManager(str(tmp_path / "backend" / ".daem0nmcp"))
+        from claude_memory.database import DatabaseManager
+        db = DatabaseManager(str(tmp_path / "backend" / ".claude-memory"))
         return db
 
     @pytest.fixture
     def client_db(self, tmp_path):
-        from daem0nmcp.database import DatabaseManager
-        db = DatabaseManager(str(tmp_path / "client" / ".daem0nmcp"))
+        from claude_memory.database import DatabaseManager
+        db = DatabaseManager(str(tmp_path / "client" / ".claude-memory"))
         return db
 
     @pytest.mark.asyncio
@@ -216,8 +216,8 @@ class TestCrossProjectRecall:
         await backend_db.init_db()
         await client_db.init_db()
 
-        from daem0nmcp.memory import MemoryManager
-        from daem0nmcp.links import LinkManager
+        from claude_memory.memory import MemoryManager
+        from claude_memory.links import LinkManager
 
         backend_memory = MemoryManager(backend_db)
         client_memory = MemoryManager(client_db)
@@ -263,10 +263,10 @@ class TestLinkedBriefing:
     async def test_briefing_shows_linked_projects(self, tmp_path):
         """get_briefing should mention linked projects."""
         from pathlib import Path
-        from daem0nmcp import server
-        from daem0nmcp.database import DatabaseManager
-        from daem0nmcp.links import LinkManager
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory import server
+        from claude_memory.database import DatabaseManager
+        from claude_memory.links import LinkManager
+        from claude_memory.memory import MemoryManager
 
         server._project_contexts.clear()
 
@@ -275,8 +275,8 @@ class TestLinkedBriefing:
         client_path = str(Path(tmp_path / "client").resolve())
 
         # Create storage directories using server's pattern
-        backend_storage = str(Path(backend_path) / ".daem0nmcp" / "storage")
-        client_storage = str(Path(client_path) / ".daem0nmcp" / "storage")
+        backend_storage = str(Path(backend_path) / ".claude-memory" / "storage")
+        client_storage = str(Path(client_path) / ".claude-memory" / "storage")
 
         # Initialize backend DB
         backend_db = DatabaseManager(backend_storage)
@@ -311,7 +311,7 @@ class TestLinkedBriefing:
         # Verify the linked project data structure is correctly populated
         linked = result["linked_projects"][0]
         assert linked["path"] == client_path
-        assert linked["available"] == True  # Now should work with correct .daem0nmcp path
+        assert linked["available"] == True  # Now should work with correct .claude-memory path
         assert linked["relationship"] == "same-project"
         # With correct storage path, we should see the warning we added
         assert linked["warning_count"] == 1
@@ -324,9 +324,9 @@ class TestLinkedProjectsE2E:
     @pytest.mark.asyncio
     async def test_complete_linked_workflow(self, tmp_path):
         """Test: link -> briefing -> recall -> unlink."""
-        from daem0nmcp.database import DatabaseManager
-        from daem0nmcp.memory import MemoryManager
-        from daem0nmcp import server
+        from claude_memory.database import DatabaseManager
+        from claude_memory.memory import MemoryManager
+        from claude_memory import server
 
         # Setup two project directories with CORRECT storage paths
         backend_path = tmp_path / "backend"
@@ -334,9 +334,9 @@ class TestLinkedProjectsE2E:
         backend_path.mkdir()
         client_path.mkdir()
 
-        # Use correct storage path: .daem0nmcp/storage
-        backend_db = DatabaseManager(str(backend_path / ".daem0nmcp" / "storage"))
-        client_db = DatabaseManager(str(client_path / ".daem0nmcp" / "storage"))
+        # Use correct storage path: .claude-memory/storage
+        backend_db = DatabaseManager(str(backend_path / ".claude-memory" / "storage"))
+        client_db = DatabaseManager(str(client_path / ".claude-memory" / "storage"))
         await backend_db.init_db()
         await client_db.init_db()
 
@@ -422,9 +422,9 @@ class TestDatabaseConsolidation:
     @pytest.mark.asyncio
     async def test_consolidate_linked_databases(self, tmp_path):
         """Should merge memories from child repos into parent."""
-        from daem0nmcp.database import DatabaseManager
-        from daem0nmcp.memory import MemoryManager
-        from daem0nmcp.links import LinkManager
+        from claude_memory.database import DatabaseManager
+        from claude_memory.memory import MemoryManager
+        from claude_memory.links import LinkManager
 
         # Setup parent and two child repos
         parent_path = tmp_path / "project"
@@ -435,9 +435,9 @@ class TestDatabaseConsolidation:
         backend_path.mkdir()
         client_path.mkdir()
 
-        # Use CORRECT storage path: .daem0nmcp/storage
-        backend_db = DatabaseManager(str(backend_path / ".daem0nmcp" / "storage"))
-        client_db = DatabaseManager(str(client_path / ".daem0nmcp" / "storage"))
+        # Use CORRECT storage path: .claude-memory/storage
+        backend_db = DatabaseManager(str(backend_path / ".claude-memory" / "storage"))
+        client_db = DatabaseManager(str(client_path / ".claude-memory" / "storage"))
         await backend_db.init_db()
         await client_db.init_db()
 
@@ -456,7 +456,7 @@ class TestDatabaseConsolidation:
         )
 
         # Initialize parent database
-        parent_db = DatabaseManager(str(parent_path / ".daem0nmcp" / "storage"))
+        parent_db = DatabaseManager(str(parent_path / ".claude-memory" / "storage"))
         await parent_db.init_db()
 
         # Link children to parent
@@ -481,13 +481,13 @@ class TestDatabaseConsolidation:
     @pytest.mark.asyncio
     async def test_consolidate_no_links_returns_status(self, tmp_path):
         """Should return no_links status when no projects are linked."""
-        from daem0nmcp.database import DatabaseManager
-        from daem0nmcp.links import LinkManager
+        from claude_memory.database import DatabaseManager
+        from claude_memory.links import LinkManager
 
         parent_path = tmp_path / "project"
         parent_path.mkdir()
 
-        parent_db = DatabaseManager(str(parent_path / ".daem0nmcp" / "storage"))
+        parent_db = DatabaseManager(str(parent_path / ".claude-memory" / "storage"))
         await parent_db.init_db()
 
         parent_links = LinkManager(parent_db)
@@ -500,10 +500,10 @@ class TestDatabaseConsolidation:
     @pytest.mark.asyncio
     async def test_consolidate_tracks_merged_from_source(self, tmp_path):
         """Merged memories should have _merged_from in context."""
-        from daem0nmcp.database import DatabaseManager
-        from daem0nmcp.memory import MemoryManager
-        from daem0nmcp.links import LinkManager
-        from daem0nmcp.models import Memory
+        from claude_memory.database import DatabaseManager
+        from claude_memory.memory import MemoryManager
+        from claude_memory.links import LinkManager
+        from claude_memory.models import Memory
         from sqlalchemy import select
 
         # Setup parent and child
@@ -512,7 +512,7 @@ class TestDatabaseConsolidation:
         parent_path.mkdir()
         child_path.mkdir()
 
-        child_db = DatabaseManager(str(child_path / ".daem0nmcp" / "storage"))
+        child_db = DatabaseManager(str(child_path / ".claude-memory" / "storage"))
         await child_db.init_db()
         child_mem = MemoryManager(child_db)
         await child_mem.remember(
@@ -521,7 +521,7 @@ class TestDatabaseConsolidation:
             project_path=str(child_path)
         )
 
-        parent_db = DatabaseManager(str(parent_path / ".daem0nmcp" / "storage"))
+        parent_db = DatabaseManager(str(parent_path / ".claude-memory" / "storage"))
         await parent_db.init_db()
 
         parent_links = LinkManager(parent_db)
@@ -546,9 +546,9 @@ class TestDatabaseConsolidation:
     @pytest.mark.asyncio
     async def test_consolidate_linked_databases_tool(self, tmp_path):
         """Test the MCP tool for consolidating databases."""
-        from daem0nmcp.database import DatabaseManager
-        from daem0nmcp.memory import MemoryManager
-        from daem0nmcp import server
+        from claude_memory.database import DatabaseManager
+        from claude_memory.memory import MemoryManager
+        from claude_memory import server
 
         server._project_contexts.clear()
 
@@ -559,7 +559,7 @@ class TestDatabaseConsolidation:
         child_path.mkdir()
 
         # Create child with memories
-        child_db = DatabaseManager(str(child_path / ".daem0nmcp" / "storage"))
+        child_db = DatabaseManager(str(child_path / ".claude-memory" / "storage"))
         await child_db.init_db()
         child_mem = MemoryManager(child_db)
         await child_mem.remember(
@@ -569,7 +569,7 @@ class TestDatabaseConsolidation:
         )
 
         # Initialize parent
-        parent_db = DatabaseManager(str(parent_path / ".daem0nmcp" / "storage"))
+        parent_db = DatabaseManager(str(parent_path / ".claude-memory" / "storage"))
         await parent_db.init_db()
 
         # Communion and link

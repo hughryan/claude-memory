@@ -38,7 +38,7 @@ class TestGitContext:
 
     def test_get_git_changes_with_project_path(self, git_repo):
         """Verify git changes are read from correct directory."""
-        from daem0nmcp.server import _get_git_changes
+        from claude_memory.server import _get_git_changes
 
         result = _get_git_changes(project_path=git_repo)
 
@@ -47,7 +47,7 @@ class TestGitContext:
 
     def test_get_git_changes_detects_uncommitted(self, git_repo):
         """Verify uncommitted changes are detected."""
-        from daem0nmcp.server import _get_git_changes
+        from claude_memory.server import _get_git_changes
 
         # Create uncommitted change
         Path(git_repo, "new_file.txt").write_text("new content")
@@ -60,7 +60,7 @@ class TestGitContext:
 
     def test_get_git_changes_returns_none_for_non_repo(self):
         """Verify None is returned for non-git directories."""
-        from daem0nmcp.server import _get_git_changes
+        from claude_memory.server import _get_git_changes
 
         with tempfile.TemporaryDirectory() as temp_dir:
             result = _get_git_changes(project_path=temp_dir)

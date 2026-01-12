@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '[Daem0n awakens] Commune with me via get_briefing() to receive your memories...'"
+            "command": "echo '[Claude Memory] Call get_briefing() to load your session context...'"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/Daem0nMCP/hooks/daem0n_prompt_hook.py\""
+            "command": "python3 \"$HOME/claude-memory/hooks/claude_memory_prompt_hook.py\""
           }
         ]
       }
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/Daem0nMCP/hooks/daem0n_pre_edit_hook.py\""
+            "command": "python3 \"$HOME/claude-memory/hooks/claude_memory_pre_edit_hook.py\""
           }
         ]
       }
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/Daem0nMCP/hooks/daem0n_post_edit_hook.py\""
+            "command": "python3 \"$HOME/claude-memory/hooks/claude_memory_post_edit_hook.py\""
           }
         ]
       }
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/Daem0nMCP/hooks/daem0n_stop_hook.py\""
+            "command": "python3 \"$HOME/claude-memory/hooks/claude_memory_stop_hook.py\""
           }
         ]
       }
@@ -61,7 +61,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/Daem0nMCP/hooks/daem0n_stop_hook.py\""
+            "command": "python3 \"$HOME/claude-memory/hooks/claude_memory_stop_hook.py\""
           }
         ]
       }

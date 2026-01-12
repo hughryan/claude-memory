@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Start Daem0nMCP as an HTTP server for Claude Code.
+Start Claude Memory as an HTTP server for Claude Code.
 
 Usage:
   python start_server.py [--port PORT] [--project PATH]
@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Start Daem0nMCP HTTP server")
+    parser = argparse.ArgumentParser(description="Start Claude Memory HTTP server")
     parser.add_argument('--port', '-p', type=int, default=9876, help="Port to listen on (default: 9876)")
     parser.add_argument('--host', default='127.0.0.1', help="Host to bind to")
     parser.add_argument('--project', help="Project directory for storage (default: current directory)")
@@ -27,23 +27,23 @@ def main():
 
     # Set project root
     project_root = args.project or os.getcwd()
-    os.environ['DAEM0NMCP_PROJECT_ROOT'] = project_root
+    os.environ['CLAUDE_MEMORY_PROJECT_ROOT'] = project_root
 
     # Import after setting environment
-    from daem0nmcp.server import mcp
+    from claude_memory.server import mcp
 
     # Configure server
     mcp.settings.host = args.host
     mcp.settings.port = args.port
 
     print(f"=" * 60)
-    print(f"Daem0nMCP HTTP Server")
+    print(f"Claude Memory HTTP Server")
     print(f"=" * 60)
     print(f"URL: http://{args.host}:{args.port}/mcp")
     print(f"Project: {project_root}")
     print(f"")
     print(f"Add this to Claude Code config (~/.claude.json):")
-    print(f'  "daem0nmcp": {{')
+    print(f'  "claudememory": {{')
     print(f'    "type": "http",')
     print(f'    "url": "http://localhost:{args.port}/mcp"')
     print(f'  }}')

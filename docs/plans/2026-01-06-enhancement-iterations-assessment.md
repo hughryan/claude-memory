@@ -1,4 +1,4 @@
-# Daem0n-MCP Enhancement Iterations: ROI Assessment
+# Claude Memory Enhancement Iterations: ROI Assessment
 
 **Date:** 2026-01-06
 **Focus:** Sharpening existing capabilities, not expanding scope
@@ -7,7 +7,7 @@
 
 ## Overview
 
-Four proposed iterations to enhance what Daem0n-MCP already does well:
+Four proposed iterations to enhance what Claude Memory already does well:
 
 | Iteration | Focus | Effort | Impact | Priority |
 |-----------|-------|--------|--------|----------|

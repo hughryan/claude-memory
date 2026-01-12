@@ -4,7 +4,7 @@ import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from daem0nmcp.covenant import (
+from claude_memory.covenant import (
     CovenantEnforcer,
     CovenantViolation,
     PreflightToken,
@@ -192,7 +192,7 @@ class TestPreflightTokenIntegration:
 
     @pytest.fixture
     def db_manager(self, tmp_path):
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
         return DatabaseManager(str(tmp_path / "storage"))
 
     @pytest.mark.asyncio
@@ -200,7 +200,7 @@ class TestPreflightTokenIntegration:
         """context_check should include a preflight_token."""
         await db_manager.init_db()
 
-        from daem0nmcp import server
+        from claude_memory import server
         server._project_contexts.clear()
 
         project_path = str(db_manager.storage_path.parent.parent)
@@ -217,7 +217,7 @@ class TestPreflightTokenIntegration:
         assert "preflight_token" in result
 
         # Verify token is valid
-        from daem0nmcp.covenant import PreflightToken
+        from claude_memory.covenant import PreflightToken
         token = PreflightToken.verify(result["preflight_token"], project_path)
         assert token is not None
         assert token.action == "About to edit auth.py"

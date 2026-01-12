@@ -1,21 +1,21 @@
 # Multi-Repository Setup Guide
 
-Daem0n-MCP supports projects split across multiple repositories while maintaining
+Claude Memory supports projects split across multiple repositories while maintaining
 a unified memory context.
 
 ## Architecture Options
 
 ### Option 1: Consolidated Parent (Recommended)
 
-All memories stored in parent directory's `.daem0nmcp/`:
+All memories stored in parent directory's `.claude_memory/`:
 
 ```
 /workspace/
-├── .daem0nmcp/        ← All memories here
+├── .claude_memory/        ← All memories here
 ├── backend/
-│   └── (no .daem0nmcp)
+│   └── (no .claude_memory)
 └── client/
-    └── (no .daem0nmcp)
+    └── (no .claude_memory)
 ```
 
 **Pros:**
@@ -32,14 +32,14 @@ remember(content="...", project_path="/workspace")
 
 ### Option 2: Linked Repositories
 
-Each repo has its own `.daem0nmcp/` but can read from linked repos:
+Each repo has its own `.claude_memory/` but can read from linked repos:
 
 ```
 /workspace/
 ├── backend/
-│   └── .daem0nmcp/    ← Backend memories
+│   └── .claude_memory/    ← Backend memories
 └── client/
-    └── .daem0nmcp/    ← Client memories (linked to backend)
+    └── .claude_memory/    ← Client memories (linked to backend)
 ```
 
 **Pros:**
@@ -58,7 +58,7 @@ recall(topic="auth", include_linked=True)
 
 ## Migrating to Consolidated
 
-If you have existing separate `.daem0nmcp/` directories:
+If you have existing separate `.claude_memory/` directories:
 
 ```python
 # 1. Initialize parent
@@ -88,7 +88,7 @@ get_briefing(project_path="/workspace")
 ## FAQ
 
 **Q: Can I undo consolidation?**
-A: If you used `archive_sources=True`, original databases are at `.daem0nmcp.archived/`.
+A: If you used `archive_sources=True`, original databases are at `.claude_memory.archived/`.
 
 **Q: What happens to file paths after merge?**
 A: They're preserved. A memory about `backend/src/auth.py` keeps that path.

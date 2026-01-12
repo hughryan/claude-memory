@@ -3,7 +3,7 @@
 import pytest
 from datetime import datetime, timezone
 
-from daem0nmcp.models import ContextTrigger
+from claude_memory.models import ContextTrigger
 
 
 class TestContextTriggerModel:
@@ -122,8 +122,8 @@ def temp_storage():
 @pytest.fixture
 async def trigger_manager(temp_storage):
     """Create a trigger manager with temporary storage."""
-    from daem0nmcp.database import DatabaseManager
-    from daem0nmcp.context_triggers import ContextTriggerManager
+    from claude_memory.database import DatabaseManager
+    from claude_memory.context_triggers import ContextTriggerManager
 
     db = DatabaseManager(temp_storage)
     await db.init_db()
@@ -396,7 +396,7 @@ async def test_get_triggered_context(trigger_manager, temp_storage):
     )
 
     # Create some memories that would match
-    from daem0nmcp.memory import MemoryManager
+    from claude_memory.memory import MemoryManager
     memory_mgr = MemoryManager(trigger_manager.db)
     await memory_mgr.remember(
         category="pattern",
@@ -450,7 +450,7 @@ async def test_check_triggers_glob_patterns(trigger_manager, temp_storage):
 @pytest.fixture
 async def covenant_compliant_project_for_triggers(tmp_path):
     """Create project that passes communion checks."""
-    from daem0nmcp import server
+    from claude_memory import server
     project_path = str(tmp_path)
     server._project_contexts.clear()
     await server.get_briefing(project_path=project_path)
@@ -461,7 +461,7 @@ async def covenant_compliant_project_for_triggers(tmp_path):
 @pytest.mark.asyncio
 async def test_mcp_add_context_trigger(covenant_compliant_project_for_triggers):
     """Test MCP tool for adding context triggers."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     result = await server.add_context_trigger(
         trigger_type="file_pattern",
@@ -477,7 +477,7 @@ async def test_mcp_add_context_trigger(covenant_compliant_project_for_triggers):
 @pytest.mark.asyncio
 async def test_mcp_list_context_triggers(covenant_compliant_project_for_triggers):
     """Test MCP tool for listing context triggers."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Add a trigger first
     await server.add_context_trigger(
@@ -499,7 +499,7 @@ async def test_mcp_list_context_triggers(covenant_compliant_project_for_triggers
 @pytest.mark.asyncio
 async def test_mcp_remove_context_trigger(covenant_compliant_project_for_triggers):
     """Test MCP tool for removing context triggers."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Add a trigger first
     add_result = await server.add_context_trigger(
@@ -528,7 +528,7 @@ async def test_mcp_remove_context_trigger(covenant_compliant_project_for_trigger
 @pytest.mark.asyncio
 async def test_mcp_check_context_triggers(covenant_compliant_project_for_triggers):
     """Test MCP tool for checking context triggers."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Add a trigger
     await server.add_context_trigger(
@@ -552,7 +552,7 @@ async def test_mcp_check_context_triggers(covenant_compliant_project_for_trigger
 @pytest.mark.asyncio
 async def test_mcp_check_context_triggers_no_match(covenant_compliant_project_for_triggers):
     """Test MCP tool returns empty when no triggers match."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Add a trigger
     await server.add_context_trigger(
@@ -575,7 +575,7 @@ async def test_mcp_check_context_triggers_no_match(covenant_compliant_project_fo
 @pytest.mark.asyncio
 async def test_mcp_resource_triggered_context(covenant_compliant_project_for_triggers):
     """Test MCP resource for triggered context."""
-    from daem0nmcp import server
+    from claude_memory import server
     import json
 
     # Add a trigger

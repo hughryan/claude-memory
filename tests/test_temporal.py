@@ -5,7 +5,7 @@ import tempfile
 import shutil
 from datetime import datetime, timezone
 
-from daem0nmcp.models import Memory, MemoryVersion
+from claude_memory.models import Memory, MemoryVersion
 
 
 @pytest.fixture
@@ -19,8 +19,8 @@ def temp_storage():
 @pytest.fixture
 async def memory_manager(temp_storage):
     """Create a memory manager with temporary storage."""
-    from daem0nmcp.database import DatabaseManager
-    from daem0nmcp.memory import MemoryManager
+    from claude_memory.database import DatabaseManager
+    from claude_memory.memory import MemoryManager
 
     db = DatabaseManager(temp_storage)
     await db.init_db()
@@ -56,7 +56,7 @@ class TestMemoryVersionModel:
 @pytest.mark.asyncio
 async def test_memory_versions_table_created(temp_storage):
     """Verify memory_versions table is created during migration."""
-    from daem0nmcp.database import DatabaseManager
+    from claude_memory.database import DatabaseManager
 
     db = DatabaseManager(temp_storage)
     await db.init_db()
@@ -76,7 +76,7 @@ async def test_memory_versions_table_created(temp_storage):
 @pytest.mark.asyncio
 async def test_memory_versions_has_composite_index(temp_storage):
     """Verify memory_versions table has composite index on (memory_id, version_number)."""
-    from daem0nmcp.database import DatabaseManager
+    from claude_memory.database import DatabaseManager
 
     db = DatabaseManager(temp_storage)
     await db.init_db()
@@ -180,7 +180,7 @@ async def test_get_memory_at_time(memory_manager):
 @pytest.mark.asyncio
 async def test_mcp_get_memory_versions_tool(covenant_compliant_project):
     """Test the MCP tool for getting memory versions."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Create a memory
     result = await server.remember(
@@ -203,7 +203,7 @@ async def test_mcp_get_memory_versions_tool(covenant_compliant_project):
 @pytest.mark.asyncio
 async def test_mcp_get_memory_at_time_tool(covenant_compliant_project):
     """Test the MCP tool for getting memory state at a specific time."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Create a memory
     result = await server.remember(
@@ -243,7 +243,7 @@ async def test_mcp_get_memory_at_time_tool(covenant_compliant_project):
 @pytest.mark.asyncio
 async def test_mcp_get_memory_at_time_invalid_timestamp(covenant_compliant_project):
     """Test get_memory_at_time with invalid timestamp format."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Create a memory
     result = await server.remember(
@@ -267,7 +267,7 @@ async def test_mcp_get_memory_at_time_invalid_timestamp(covenant_compliant_proje
 @pytest.mark.asyncio
 async def test_mcp_get_memory_versions_missing_project_path():
     """Test that get_memory_versions requires project_path."""
-    from daem0nmcp import server
+    from claude_memory import server
 
     # Call without project_path
     result = await server.get_memory_versions(memory_id=1)

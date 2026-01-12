@@ -45,6 +45,7 @@ logs/
 
 # Avoid re-adding
 /nul
+.claude-memory/
 .daem0nmcp/
 .test_tmp/
 .tmp/

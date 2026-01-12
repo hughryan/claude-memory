@@ -4,8 +4,8 @@ import pytest
 import sqlite3
 from datetime import datetime, timezone
 
-from daem0nmcp.models import SessionState, EnforcementBypassLog
-from daem0nmcp.migrations import run_migrations, MIGRATIONS
+from claude_memory.models import SessionState, EnforcementBypassLog
+from claude_memory.migrations import run_migrations, MIGRATIONS
 
 
 class TestEnforcementModels:
@@ -98,18 +98,18 @@ class TestSessionManager:
     @pytest.fixture
     def db_manager(self, tmp_path):
         """Create a test database manager."""
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
         return DatabaseManager(str(tmp_path / "storage"))
 
     @pytest.fixture
     def session_mgr(self, db_manager):
         """Create a session manager."""
-        from daem0nmcp.enforcement import SessionManager
+        from claude_memory.enforcement import SessionManager
         return SessionManager(db_manager)
 
     def test_get_session_id_format(self):
         """Session ID should be deterministic based on project and hour."""
-        from daem0nmcp.enforcement import get_session_id
+        from claude_memory.enforcement import get_session_id
         session_id = get_session_id("/path/to/project")
         assert "-" in session_id
         parts = session_id.split("-")
@@ -118,14 +118,14 @@ class TestSessionManager:
 
     def test_get_session_id_same_hour(self):
         """Same project in same hour should get same session ID."""
-        from daem0nmcp.enforcement import get_session_id
+        from claude_memory.enforcement import get_session_id
         id1 = get_session_id("/path/to/project")
         id2 = get_session_id("/path/to/project")
         assert id1 == id2
 
     def test_get_session_id_different_projects(self):
         """Different projects should get different session IDs."""
-        from daem0nmcp.enforcement import get_session_id
+        from claude_memory.enforcement import get_session_id
         id1 = get_session_id("/path/to/project1")
         id2 = get_session_id("/path/to/project2")
         assert id1 != id2
@@ -225,19 +225,19 @@ class TestPreCommitChecker:
     @pytest.fixture
     def db_manager(self, tmp_path):
         """Create a test database manager."""
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
         return DatabaseManager(str(tmp_path / "storage"))
 
     @pytest.fixture
     def memory_mgr(self, db_manager):
         """Create a memory manager."""
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory.memory import MemoryManager
         return MemoryManager(db_manager)
 
     @pytest.fixture
     def checker(self, db_manager, memory_mgr):
         """Create a pre-commit checker."""
-        from daem0nmcp.enforcement import PreCommitChecker
+        from claude_memory.enforcement import PreCommitChecker
         return PreCommitChecker(db_manager, memory_mgr)
 
     @pytest.mark.asyncio
@@ -265,7 +265,7 @@ class TestPreCommitChecker:
         old_time = datetime.now(timezone.utc) - timedelta(hours=25)
 
         # Create memory directly in database
-        from daem0nmcp.models import Memory
+        from claude_memory.models import Memory
         async with db_manager.get_session() as session:
             decision = Memory(
                 category="decision",
@@ -328,7 +328,7 @@ class TestPreCommitChecker:
         from datetime import timedelta
         recent_time = datetime.now(timezone.utc) - timedelta(hours=12)
 
-        from daem0nmcp.models import Memory
+        from claude_memory.models import Memory
         async with db_manager.get_session() as session:
             decision = Memory(
                 category="decision",
@@ -359,7 +359,7 @@ class TestPreCommitCLI:
         import sys
 
         result = subprocess.run(
-            [sys.executable, "-m", "daem0nmcp.cli", "pre-commit", "--help"],
+            [sys.executable, "-m", "claude_memory.cli", "pre-commit", "--help"],
             capture_output=True, text=True
         )
         assert result.returncode == 0
@@ -371,7 +371,7 @@ class TestPreCommitCLI:
         import sys
 
         result = subprocess.run(
-            [sys.executable, "-m", "daem0nmcp.cli",
+            [sys.executable, "-m", "claude_memory.cli",
              "--project-path", str(tmp_path),
              "pre-commit", "--staged-files"],
             capture_output=True, text=True
@@ -389,7 +389,7 @@ class TestStatusCLI:
         import sys
 
         result = subprocess.run(
-            [sys.executable, "-m", "daem0nmcp.cli", "status", "--help"],
+            [sys.executable, "-m", "claude_memory.cli", "status", "--help"],
             capture_output=True, text=True
         )
         assert result.returncode == 0
@@ -401,7 +401,7 @@ class TestStatusCLI:
         import json
 
         result = subprocess.run(
-            [sys.executable, "-m", "daem0nmcp.cli",
+            [sys.executable, "-m", "claude_memory.cli",
              "--project-path", str(tmp_path), "--json", "status"],
             capture_output=True, text=True
         )
@@ -420,7 +420,7 @@ class TestRecordOutcomeCLI:
         import sys
 
         result = subprocess.run(
-            [sys.executable, "-m", "daem0nmcp.cli", "record-outcome", "--help"],
+            [sys.executable, "-m", "claude_memory.cli", "record-outcome", "--help"],
             capture_output=True, text=True
         )
         assert result.returncode == 0
@@ -432,7 +432,7 @@ class TestRecordOutcomeCLI:
         import sys
 
         result = subprocess.run(
-            [sys.executable, "-m", "daem0nmcp.cli", "record-outcome", "1", "test outcome"],
+            [sys.executable, "-m", "claude_memory.cli", "record-outcome", "1", "test outcome"],
             capture_output=True, text=True
         )
         assert result.returncode == 1
@@ -448,7 +448,7 @@ class TestInstallHooksCLI:
         import sys
 
         result = subprocess.run(
-            [sys.executable, "-m", "daem0nmcp.cli", "install-hooks", "--help"],
+            [sys.executable, "-m", "claude_memory.cli", "install-hooks", "--help"],
             capture_output=True, text=True
         )
         assert result.returncode == 0
@@ -463,7 +463,7 @@ class TestInstallHooksCLI:
         git_dir.mkdir(parents=True)
 
         result = subprocess.run(
-            [sys.executable, "-m", "daem0nmcp.cli",
+            [sys.executable, "-m", "claude_memory.cli",
              "--project-path", str(tmp_path), "install-hooks"],
             capture_output=True, text=True
         )
@@ -473,7 +473,7 @@ class TestInstallHooksCLI:
 
         # Check hook content
         hook_content = (git_dir / "pre-commit").read_text()
-        assert "daem0nmcp" in hook_content
+        assert "claude_memory" in hook_content
 
     def test_uninstall_hooks_command_exists(self):
         """The uninstall-hooks subcommand should exist."""
@@ -481,7 +481,7 @@ class TestInstallHooksCLI:
         import sys
 
         result = subprocess.run(
-            [sys.executable, "-m", "daem0nmcp.cli", "uninstall-hooks", "--help"],
+            [sys.executable, "-m", "claude_memory.cli", "uninstall-hooks", "--help"],
             capture_output=True, text=True
         )
         assert result.returncode == 0
@@ -492,17 +492,17 @@ class TestMCPSessionTracking:
 
     @pytest.fixture
     def db_manager(self, tmp_path):
-        from daem0nmcp.database import DatabaseManager
+        from claude_memory.database import DatabaseManager
         return DatabaseManager(str(tmp_path / "storage"))
 
     @pytest.fixture
     def memory_mgr(self, db_manager):
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory.memory import MemoryManager
         return MemoryManager(db_manager)
 
     @pytest.fixture
     def session_mgr(self, db_manager):
-        from daem0nmcp.enforcement import SessionManager
+        from claude_memory.enforcement import SessionManager
         return SessionManager(db_manager)
 
     @pytest.mark.asyncio

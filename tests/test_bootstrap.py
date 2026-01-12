@@ -5,7 +5,7 @@ import subprocess
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from daem0nmcp.server import _extract_project_identity, _extract_architecture, _extract_conventions, _extract_entry_points, _scan_todos_for_bootstrap, _extract_project_instructions
+from claude_memory.server import _extract_project_identity, _extract_architecture, _extract_conventions, _extract_entry_points, _scan_todos_for_bootstrap, _extract_project_instructions
 
 
 class TestExtractProjectIdentity:
@@ -281,7 +281,7 @@ class TestBootstrapProjectContext:
         mock_ctx.project_path = str(tmp_path)
         mock_ctx.memory_manager = mock_memory_manager
 
-        from daem0nmcp.server import _bootstrap_project_context
+        from claude_memory.server import _bootstrap_project_context
         result = await _bootstrap_project_context(mock_ctx)
 
         assert result["bootstrapped"] is True
@@ -299,7 +299,7 @@ class TestBootstrapProjectContext:
         mock_ctx.project_path = str(tmp_path)
         mock_ctx.memory_manager = mock_memory_manager
 
-        from daem0nmcp.server import _bootstrap_project_context
+        from claude_memory.server import _bootstrap_project_context
         result = await _bootstrap_project_context(mock_ctx)
 
         assert result["bootstrapped"] is True

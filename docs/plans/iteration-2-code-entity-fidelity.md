@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-This plan details the implementation of "Code Entity Fidelity" for Daem0n-MCP, improving how code entities are tracked and linked to memories:
+This plan details the implementation of "Code Entity Fidelity" for Claude Memory, improving how code entities are tracked and linked to memories:
 
 1. **Stable symbol IDs** - Remove line_start from ID, use qualified_name instead
 2. **Extract imports from AST** - Add import extraction queries per language
@@ -21,7 +21,7 @@ This plan details the implementation of "Code Entity Fidelity" for Daem0n-MCP, i
 
 ### 1. Symbol ID Generation (Problem: Unstable IDs)
 
-**File:** `daem0nmcp/code_indexer.py` (lines 449-454)
+**File:** `claude_memory/code_indexer.py` (lines 449-454)
 
 ```python
 def _make_entity_dict(self, **kwargs) -> Dict[str, Any]:
@@ -59,7 +59,7 @@ The `qualified_name` field exists but is never computed.
 
 ### 1.1 Add Qualified Name Extraction Logic
 
-**File:** `daem0nmcp/code_indexer.py`
+**File:** `claude_memory/code_indexer.py`
 
 Add method to walk parent scopes:
 
@@ -153,7 +153,7 @@ yield {
 
 ### 2.1 Update ID Generation Logic
 
-**File:** `daem0nmcp/code_indexer.py`
+**File:** `claude_memory/code_indexer.py`
 
 Replace the ID generation:
 
@@ -182,7 +182,7 @@ def _make_entity_dict(self, **kwargs) -> Dict[str, Any]:
 
 ### 3.1 Add Import Queries
 
-**File:** `daem0nmcp/code_indexer.py`
+**File:** `claude_memory/code_indexer.py`
 
 Add after `ENTITY_QUERIES`:
 
@@ -294,7 +294,7 @@ def index_file(self, file_path: Path, project_path: Path):
 
 ### 4.1 Add Auto-Link Helper to MemoryManager
 
-**File:** `daem0nmcp/memory.py`
+**File:** `claude_memory/memory.py`
 
 ```python
 async def _link_memory_to_entities(
@@ -426,7 +426,7 @@ async def get_memories_for_entity(
 
 ### 5.1 Add Index for qualified_name
 
-**File:** `daem0nmcp/migrations/schema.py`
+**File:** `claude_memory/migrations/schema.py`
 
 ```python
 (11, "Add index on code_entities qualified_name", [
@@ -436,7 +436,7 @@ async def get_memories_for_entity(
 
 ### 5.2 Backfill Script
 
-**File:** `daem0nmcp/migrations/backfill_code_refs.py`
+**File:** `claude_memory/migrations/backfill_code_refs.py`
 
 ```python
 async def backfill_code_refs(db_manager, project_path: str) -> dict:
@@ -486,7 +486,7 @@ async def backfill_code_refs(db_manager, project_path: str) -> dict:
 ```python
 class TestQualifiedNames:
     def test_qualified_name_nested_class_method(self, temp_project, nested_python):
-        from daem0nmcp.code_indexer import TreeSitterIndexer
+        from claude_memory.code_indexer import TreeSitterIndexer
 
         indexer = TreeSitterIndexer()
         entities = list(indexer.index_file(nested_python, temp_project))

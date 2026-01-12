@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-This plan details three enhancements to Daem0n-MCP's search capabilities:
+This plan details three enhancements to Claude Memory's search capabilities:
 1. **Configurable hybrid weight** - Move hardcoded `0.3` to settings
 2. **Result diversity** - Limit results from same source file (max 3 per file)
 3. **Lightweight tag inference** - Auto-add semantic tags (`bugfix`, `tech-debt`, `perf`, `warning`)
@@ -23,7 +23,7 @@ All changes are isolated, testable, and maintain backward compatibility.
 
 The hybrid weight is hardcoded in two locations:
 
-**Location 1: `/home/user/Daem0n-MCP/daem0nmcp/vectors.py` line 157**
+**Location 1: `/home/user/Claude Memory/claude_memory/vectors.py` line 157**
 ```python
 class HybridSearch:
     def __init__(self, tfidf_index, vector_index: Optional[VectorIndex] = None):
@@ -32,7 +32,7 @@ class HybridSearch:
         self.vector_weight = 0.3  # How much to weight vectors vs TF-IDF
 ```
 
-**Location 2: `/home/user/Daem0n-MCP/daem0nmcp/memory.py` lines 219**
+**Location 2: `/home/user/Claude Memory/claude_memory/memory.py` lines 219**
 ```python
 def _hybrid_search(
     self,
@@ -49,7 +49,7 @@ def _hybrid_search(
 
 #### Step 1.1: Add Config Option
 
-**File:** `/home/user/Daem0n-MCP/daem0nmcp/config.py`
+**File:** `/home/user/Claude Memory/claude_memory/config.py`
 
 **Location:** After line 65 (after `watcher_watch_extensions`)
 
@@ -62,7 +62,7 @@ def _hybrid_search(
 
 #### Step 1.2: Update memory.py
 
-**File:** `/home/user/Daem0n-MCP/daem0nmcp/memory.py`
+**File:** `/home/user/Claude Memory/claude_memory/memory.py`
 
 **Change line 219 from:**
 ```python
@@ -81,7 +81,7 @@ from .config import settings
 
 #### Step 1.3: Update vectors.py
 
-**File:** `/home/user/Daem0n-MCP/daem0nmcp/vectors.py`
+**File:** `/home/user/Claude Memory/claude_memory/vectors.py`
 
 **Add import at top (after line 7):**
 ```python
@@ -95,7 +95,7 @@ from .config import settings
 
 **To:**
 ```python
-        self.vector_weight = settings.hybrid_vector_weight  # Configurable via DAEM0NMCP_HYBRID_VECTOR_WEIGHT
+        self.vector_weight = settings.hybrid_vector_weight  # Configurable via CLAUDE_MEMORY_HYBRID_VECTOR_WEIGHT
 ```
 
 ---
@@ -110,7 +110,7 @@ Search returns top-k results by score only. If 10 memories relate to the same fi
 
 #### Step 2.1: Add Diversity Function
 
-**File:** `/home/user/Daem0n-MCP/daem0nmcp/memory.py`
+**File:** `/home/user/Claude Memory/claude_memory/memory.py`
 
 **Location:** Add after the `_hybrid_search()` method (after line 268)
 
@@ -160,7 +160,7 @@ Search returns top-k results by score only. If 10 memories relate to the same fi
 
 #### Step 2.2: Apply Diversity in recall()
 
-**File:** `/home/user/Daem0n-MCP/daem0nmcp/memory.py`
+**File:** `/home/user/Claude Memory/claude_memory/memory.py`
 
 **Location:** In `recall()` method, after line 723 where `memories` dict is populated
 
@@ -178,7 +178,7 @@ Search returns top-k results by score only. If 10 memories relate to the same fi
 
 #### Step 2.3: Apply Diversity in search()
 
-**File:** `/home/user/Daem0n-MCP/daem0nmcp/memory.py`
+**File:** `/home/user/Claude Memory/claude_memory/memory.py`
 
 **Location:** In `search()` method, around line 1122
 
@@ -202,7 +202,7 @@ Tags are passed explicitly to `remember()`. The `TFIDFIndex.add_document()` alre
 
 #### Step 3.1: Add Tag Inference Function
 
-**File:** `/home/user/Daem0n-MCP/daem0nmcp/memory.py`
+**File:** `/home/user/Claude Memory/claude_memory/memory.py`
 
 **Location:** Add as a module-level function after the `_normalize_file_path()` function (after line 95)
 
@@ -263,7 +263,7 @@ def _infer_tags(content: str, category: str, existing_tags: Optional[List[str]] 
 
 #### Step 3.2: Integrate Into remember()
 
-**File:** `/home/user/Daem0n-MCP/daem0nmcp/memory.py`
+**File:** `/home/user/Claude Memory/claude_memory/memory.py`
 
 **Location:** In `remember()` method, around line 299
 
@@ -277,7 +277,7 @@ def _infer_tags(content: str, category: str, existing_tags: Optional[List[str]] 
 
 #### Step 3.3: Integrate Into remember_batch()
 
-**File:** `/home/user/Daem0n-MCP/daem0nmcp/memory.py`
+**File:** `/home/user/Claude Memory/claude_memory/memory.py`
 
 **Location:** In `remember_batch()` method, around line 472
 
@@ -297,14 +297,14 @@ def _infer_tags(content: str, category: str, existing_tags: Optional[List[str]] 
 
 ## 4. Test Cases
 
-### New Test File: `/home/user/Daem0n-MCP/tests/test_search_quality.py`
+### New Test File: `/home/user/Claude Memory/tests/test_search_quality.py`
 
 ```python
 """Tests for Iteration 1: Search Quality enhancements."""
 
 import pytest
-from daem0nmcp.memory import _infer_tags, MemoryManager
-from daem0nmcp.config import Settings
+from claude_memory.memory import _infer_tags, MemoryManager
+from claude_memory.config import Settings
 
 
 class TestConfigurableHybridWeight:
@@ -317,19 +317,19 @@ class TestConfigurableHybridWeight:
 
     def test_hybrid_weight_from_env(self, monkeypatch):
         """Hybrid weight can be set via environment."""
-        monkeypatch.setenv("DAEM0NMCP_HYBRID_VECTOR_WEIGHT", "0.5")
+        monkeypatch.setenv("CLAUDE_MEMORY_HYBRID_VECTOR_WEIGHT", "0.5")
         settings = Settings()
         assert settings.hybrid_vector_weight == 0.5
 
     def test_hybrid_weight_bounds(self, monkeypatch):
         """Verify extreme values work."""
         # TF-IDF only
-        monkeypatch.setenv("DAEM0NMCP_HYBRID_VECTOR_WEIGHT", "0.0")
+        monkeypatch.setenv("CLAUDE_MEMORY_HYBRID_VECTOR_WEIGHT", "0.0")
         settings = Settings()
         assert settings.hybrid_vector_weight == 0.0
 
         # Vectors only
-        monkeypatch.setenv("DAEM0NMCP_HYBRID_VECTOR_WEIGHT", "1.0")
+        monkeypatch.setenv("CLAUDE_MEMORY_HYBRID_VECTOR_WEIGHT", "1.0")
         settings = Settings()
         assert settings.hybrid_vector_weight == 1.0
 
@@ -344,7 +344,7 @@ class TestResultDiversity:
 
     def test_diversity_from_env(self, monkeypatch):
         """Diversity limit can be set via environment."""
-        monkeypatch.setenv("DAEM0NMCP_SEARCH_DIVERSITY_MAX_PER_FILE", "5")
+        monkeypatch.setenv("CLAUDE_MEMORY_SEARCH_DIVERSITY_MAX_PER_FILE", "5")
         settings = Settings()
         assert settings.search_diversity_max_per_file == 5
 
@@ -435,23 +435,23 @@ Existing memories work as-is. New memories will have inferred tags added.
 1. **Hybrid Weight Configuration:**
    ```bash
    # Test default (0.3)
-   python -c "from daem0nmcp.config import settings; print(settings.hybrid_vector_weight)"
+   python -c "from claude_memory.config import settings; print(settings.hybrid_vector_weight)"
    # Output: 0.3
 
    # Test override
-   DAEM0NMCP_HYBRID_VECTOR_WEIGHT=0.7 python -c "from daem0nmcp.config import settings; print(settings.hybrid_vector_weight)"
+   CLAUDE_MEMORY_HYBRID_VECTOR_WEIGHT=0.7 python -c "from claude_memory.config import settings; print(settings.hybrid_vector_weight)"
    # Output: 0.7
    ```
 
 2. **Diversity Configuration:**
    ```bash
-   python -c "from daem0nmcp.config import settings; print(settings.search_diversity_max_per_file)"
+   python -c "from claude_memory.config import settings; print(settings.search_diversity_max_per_file)"
    # Output: 3
    ```
 
 3. **Tag Inference:**
    ```bash
-   python -c "from daem0nmcp.memory import _infer_tags; print(_infer_tags('Fixed the bug', 'decision'))"
+   python -c "from claude_memory.memory import _infer_tags; print(_infer_tags('Fixed the bug', 'decision'))"
    # Output: ['bugfix']
    ```
 
@@ -474,8 +474,8 @@ pytest tests/ -v --tb=short
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `DAEM0NMCP_HYBRID_VECTOR_WEIGHT` | float | `0.3` | Weight for vector similarity (0.0=TF-IDF only, 1.0=vectors only) |
-| `DAEM0NMCP_SEARCH_DIVERSITY_MAX_PER_FILE` | int | `3` | Max results from same source file (0=unlimited) |
+| `CLAUDE_MEMORY_HYBRID_VECTOR_WEIGHT` | float | `0.3` | Weight for vector similarity (0.0=TF-IDF only, 1.0=vectors only) |
+| `CLAUDE_MEMORY_SEARCH_DIVERSITY_MAX_PER_FILE` | int | `3` | Max results from same source file (0=unlimited) |
 
 ---
 
@@ -484,7 +484,7 @@ pytest tests/ -v --tb=short
 All changes are backward-compatible:
 - Config options have defaults matching current behavior
 - Tag inference only adds tags, never removes
-- Diversity can be disabled with `DAEM0NMCP_SEARCH_DIVERSITY_MAX_PER_FILE=0`
+- Diversity can be disabled with `CLAUDE_MEMORY_SEARCH_DIVERSITY_MAX_PER_FILE=0`
 
 To rollback:
 1. Revert git commits

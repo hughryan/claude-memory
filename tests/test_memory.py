@@ -5,8 +5,8 @@ from pathlib import Path
 import tempfile
 import shutil
 
-from daem0nmcp.database import DatabaseManager
-from daem0nmcp.memory import MemoryManager, extract_keywords
+from claude_memory.database import DatabaseManager
+from claude_memory.memory import MemoryManager, extract_keywords
 
 
 class TestExtractKeywords:
@@ -583,7 +583,7 @@ class TestPathNormalization:
 
     def test_normalize_file_path_relative_to_absolute(self, tmp_path):
         """Test converting relative path to absolute."""
-        from daem0nmcp.memory import _normalize_file_path
+        from claude_memory.memory import _normalize_file_path
 
         # Use real temp directory for cross-platform compatibility
         project_path = str(tmp_path / "project")
@@ -602,7 +602,7 @@ class TestPathNormalization:
 
     def test_normalize_file_path_absolute_input(self, tmp_path):
         """Test handling of already absolute path."""
-        from daem0nmcp.memory import _normalize_file_path
+        from claude_memory.memory import _normalize_file_path
 
         # Use real temp directory for cross-platform compatibility
         project_path = tmp_path / "project"
@@ -623,7 +623,7 @@ class TestPathNormalization:
 
     def test_normalize_file_path_outside_project(self, tmp_path):
         """Test handling of path outside project root."""
-        from daem0nmcp.memory import _normalize_file_path
+        from claude_memory.memory import _normalize_file_path
 
         # Use real temp directory for cross-platform compatibility
         project_path = tmp_path / "project"
@@ -646,7 +646,7 @@ class TestPathNormalization:
 
     def test_normalize_file_path_empty(self, tmp_path):
         """Test handling of empty path."""
-        from daem0nmcp.memory import _normalize_file_path
+        from claude_memory.memory import _normalize_file_path
 
         project_path = str(tmp_path / "project")
         absolute, relative = _normalize_file_path("", project_path)
@@ -656,7 +656,7 @@ class TestPathNormalization:
 
     def test_normalize_file_path_none(self, tmp_path):
         """Test handling of None path."""
-        from daem0nmcp.memory import _normalize_file_path
+        from claude_memory.memory import _normalize_file_path
 
         project_path = str(tmp_path / "project")
         absolute, relative = _normalize_file_path(None, project_path)
@@ -682,7 +682,7 @@ class TestPathNormalization:
         memory_id = result["id"]
 
         # Fetch the memory from database to verify paths were stored
-        from daem0nmcp.models import Memory
+        from claude_memory.models import Memory
         from sqlalchemy import select
 
         async with memory_manager.db.get_session() as session:
@@ -1059,7 +1059,7 @@ class TestTTLCache:
 
     def test_cache_basic_set_get(self):
         """Test basic cache set and get operations."""
-        from daem0nmcp.cache import TTLCache
+        from claude_memory.cache import TTLCache
 
         cache = TTLCache(ttl=5.0, maxsize=100)
 
@@ -1071,7 +1071,7 @@ class TestTTLCache:
 
     def test_cache_miss(self):
         """Test cache miss returns (False, None)."""
-        from daem0nmcp.cache import TTLCache
+        from claude_memory.cache import TTLCache
 
         cache = TTLCache(ttl=5.0, maxsize=100)
 
@@ -1083,7 +1083,7 @@ class TestTTLCache:
     def test_cache_ttl_expiration(self):
         """Test that entries expire after TTL."""
         import time
-        from daem0nmcp.cache import TTLCache
+        from claude_memory.cache import TTLCache
 
         cache = TTLCache(ttl=0.1, maxsize=100)  # 100ms TTL
 
@@ -1097,7 +1097,7 @@ class TestTTLCache:
 
     def test_cache_invalidate(self):
         """Test manual cache invalidation."""
-        from daem0nmcp.cache import TTLCache
+        from claude_memory.cache import TTLCache
 
         cache = TTLCache(ttl=5.0, maxsize=100)
 
@@ -1111,7 +1111,7 @@ class TestTTLCache:
 
     def test_cache_invalidate_nonexistent(self):
         """Test invalidating non-existent key."""
-        from daem0nmcp.cache import TTLCache
+        from claude_memory.cache import TTLCache
 
         cache = TTLCache(ttl=5.0, maxsize=100)
 
@@ -1120,7 +1120,7 @@ class TestTTLCache:
 
     def test_cache_clear(self):
         """Test clearing the entire cache."""
-        from daem0nmcp.cache import TTLCache
+        from claude_memory.cache import TTLCache
 
         cache = TTLCache(ttl=5.0, maxsize=100)
 
@@ -1135,7 +1135,7 @@ class TestTTLCache:
 
     def test_cache_maxsize_eviction(self):
         """Test that oldest entries are evicted when maxsize is reached."""
-        from daem0nmcp.cache import TTLCache
+        from claude_memory.cache import TTLCache
 
         cache = TTLCache(ttl=5.0, maxsize=3)
 
@@ -1155,7 +1155,7 @@ class TestTTLCache:
 
     def test_cache_stats(self):
         """Test cache statistics."""
-        from daem0nmcp.cache import TTLCache
+        from claude_memory.cache import TTLCache
 
         cache = TTLCache(ttl=5.0, maxsize=100)
 
@@ -1177,7 +1177,7 @@ class TestMakeCacheKey:
 
     def test_basic_cache_key(self):
         """Test basic cache key generation."""
-        from daem0nmcp.cache import make_cache_key
+        from claude_memory.cache import make_cache_key
 
         key = make_cache_key("topic", ["cat1", "cat2"], None)
 
@@ -1186,7 +1186,7 @@ class TestMakeCacheKey:
 
     def test_cache_key_with_kwargs(self):
         """Test cache key with keyword arguments."""
-        from daem0nmcp.cache import make_cache_key
+        from claude_memory.cache import make_cache_key
 
         key1 = make_cache_key("topic", limit=10, offset=0)
         key2 = make_cache_key("topic", offset=0, limit=10)  # Same args, different order
@@ -1196,7 +1196,7 @@ class TestMakeCacheKey:
 
     def test_cache_key_handles_lists(self):
         """Test that lists are converted to tuples for hashability."""
-        from daem0nmcp.cache import make_cache_key
+        from claude_memory.cache import make_cache_key
 
         # Should not raise (lists converted to tuples)
         key = make_cache_key("topic", ["a", "b", "c"])
@@ -1204,7 +1204,7 @@ class TestMakeCacheKey:
 
     def test_cache_key_handles_dicts(self):
         """Test that dicts are converted for hashability."""
-        from daem0nmcp.cache import make_cache_key
+        from claude_memory.cache import make_cache_key
 
         # Should not raise (dicts converted to sorted tuple of items)
         key = make_cache_key("topic", {"a": 1, "b": 2})
@@ -1217,7 +1217,7 @@ class TestRecallCaching:
     @pytest.mark.asyncio
     async def test_recall_cache_hit(self, memory_manager):
         """Test that identical recalls use cache."""
-        from daem0nmcp.cache import get_recall_cache
+        from claude_memory.cache import get_recall_cache
 
         # Clear cache to start fresh
         get_recall_cache().clear()
@@ -1252,7 +1252,7 @@ class TestRecallCaching:
     @pytest.mark.asyncio
     async def test_recall_cache_invalidated_on_remember(self, memory_manager):
         """Test that cache is cleared when new memory is added."""
-        from daem0nmcp.cache import get_recall_cache
+        from claude_memory.cache import get_recall_cache
 
         # Create initial memory and recall it
         await memory_manager.remember(
@@ -1276,7 +1276,7 @@ class TestRecallCaching:
     @pytest.mark.asyncio
     async def test_recall_cache_invalidated_on_outcome(self, memory_manager):
         """Test that cache is cleared when outcome is recorded."""
-        from daem0nmcp.cache import get_recall_cache
+        from claude_memory.cache import get_recall_cache
 
         # Create memory
         result = await memory_manager.remember(

@@ -14,7 +14,7 @@ class TestRememberCLI:
         """CLI remember command should create a memory."""
         result = subprocess.run(
             [
-                sys.executable, "-m", "daem0nmcp.cli",
+                sys.executable, "-m", "claude_memory.cli",
                 "--project-path", str(tmp_path),
                 "--json",
                 "remember",
@@ -36,7 +36,7 @@ class TestRememberCLI:
         """CLI remember should accept file_path."""
         result = subprocess.run(
             [
-                sys.executable, "-m", "daem0nmcp.cli",
+                sys.executable, "-m", "claude_memory.cli",
                 "--project-path", str(tmp_path),
                 "--json",
                 "remember",

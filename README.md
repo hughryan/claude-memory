@@ -1,9 +1,9 @@
-# Daem0nMCP
+# Claude Memory
 
 ```
         ,     ,
        /(     )\
-      |  \   /  |      "I am Daem0n, keeper of memories,
+      |  \   /  |      "I am Claude Memory, keeper of memories,
        \  \ /  /        guardian of decisions past..."
         \  Y  /
          \ | /
@@ -15,16 +15,16 @@
 
 ## What's New in v2.16.0
 
-### Sacred Covenant Enforcement
-The Sacred Covenant is now **enforced**, not just advisory:
+### Protocol Enforcement
+The Protocol is now **enforced**, not just advisory:
 
-- **`requires_communion`**: Tools block with `COMMUNION_REQUIRED` until `get_briefing()` is called
+- **`requires_initialization`**: Tools block with `COMMUNION_REQUIRED` until `get_briefing()` is called
 - **`requires_counsel`**: Mutating tools block with `COUNSEL_REQUIRED` until `context_check()` is called
 - **Preflight tokens**: `context_check()` returns a cryptographic token valid for 5 minutes
 - **Remedies**: Each block includes the exact tool call needed to fix it
 
 **Affected tools:**
-- Communion required: `remember`, `remember_batch`, `add_rule`, `update_rule`, `record_outcome`, `link_memories`, `pin_memory`, `archive_memory`, `prune_memories`, `cleanup_memories`, `compact_memories`
+- Initialization required: `remember`, `remember_batch`, `add_rule`, `update_rule`, `record_outcome`, `link_memories`, `pin_memory`, `archive_memory`, `prune_memories`, `cleanup_memories`, `compact_memories`
 - Exempt (read-only): `recall`, `recall_for_file`, `search_memories`, `find_code`, `analyze_impact`, `check_rules`, `list_rules`
 
 ### MCP Resources (Dynamic Context Injection)
@@ -32,21 +32,21 @@ Resources that Claude Desktop/Code can subscribe to for automatic context:
 
 | Resource URI | Content |
 |-------------|---------|
-| `daem0n://warnings/{project_path}` | All active warnings |
-| `daem0n://failed/{project_path}` | Failed approaches to avoid |
-| `daem0n://rules/{project_path}` | All configured rules |
-| `daem0n://context/{project_path}` | Combined context (warnings + failed + rules) |
-| `daem0n://triggered/{file_path}` | Auto-recalled context for a file |
+| `memory://warnings/{project_path}` | All active warnings |
+| `memory://failed/{project_path}` | Failed approaches to avoid |
+| `memory://rules/{project_path}` | All configured rules |
+| `memory://context/{project_path}` | Combined context (warnings + failed + rules) |
+| `memory://triggered/{file_path}` | Auto-recalled context for a file |
 
 ### Claude Code 2.1.3 Compatibility
-- Fixed `daem0n_pre_edit_hook.py` to use MCP HTTP instead of removed `check-triggers` CLI command
+- Fixed `claude_memory_pre_edit_hook.py` to use MCP HTTP instead of removed `check-triggers` CLI command
 - Hooks now communicate directly with MCP server for context triggers
 
 ## What's New in v2.15.0
 
 ### Iteration 1: Search Quality
-- **Configurable hybrid weight**: `DAEM0NMCP_HYBRID_VECTOR_WEIGHT` (0.0-1.0)
-- **Result diversity**: `DAEM0NMCP_SEARCH_DIVERSITY_MAX_PER_FILE` limits same-file results
+- **Configurable hybrid weight**: `CLAUDE_MEMORY_HYBRID_VECTOR_WEIGHT` (0.0-1.0)
+- **Result diversity**: `CLAUDE_MEMORY_SEARCH_DIVERSITY_MAX_PER_FILE` limits same-file results
 - **Tag inference**: Auto-adds `bugfix`, `tech-debt`, `perf`, `warning` tags
 
 ### Iteration 2: Code Entity Fidelity
@@ -106,7 +106,7 @@ Auto-recall memories without explicit calls based on context patterns:
 - `list_context_triggers()` / `remove_context_trigger(id)`
 - Supports file patterns, tag matching, entity matching
 - Integrated with pre-edit hooks for automatic injection
-- MCP Resource: `daem0n://triggered/{file_path}`
+- MCP Resource: `memory://triggered/{file_path}`
 
 ## What's New in v2.13.0
 
@@ -134,11 +134,11 @@ Auto-recall memories without explicit calls based on context patterns:
   - `consolidate_linked_databases()` - Merge child DBs into unified parent
   - `get_briefing()` now shows linked project warnings/stats
   - See `docs/multi-repo-setup.md` for full guide
-  - New skill: `summon_daem0n` for project setup guidance
+  - New skill: `setup-guide` for project setup guidance
 
 ### Previous Features (v2.10.0)
 
-- **Code Understanding Layer (Phase 2)**: The Daem0n now understands your code structure
+- **Code Understanding Layer (Phase 2)**: The memory system now understands your code structure
   - Multi-language AST parsing via `tree-sitter-language-pack`
   - Supports: Python, TypeScript, JavaScript, Go, Rust, Java, C, C++, C#, Ruby, PHP
   - Extracts: classes, functions, methods, signatures, docstrings
@@ -146,7 +146,7 @@ Auto-recall memories without explicit calls based on context patterns:
     - `index_project` - Index code entities for understanding
     - `find_code` - Semantic search across code entities
     - `analyze_impact` - Analyze what changing an entity would affect
-  - CLI: `python -m daem0nmcp.cli index`
+  - CLI: `python -m claude_memory.cli index`
   - New models: `CodeEntity`, `MemoryCodeRef`
 
 ### Previous Features (v2.9.0)
@@ -154,15 +154,15 @@ Auto-recall memories without explicit calls based on context patterns:
 - **Qdrant Vector Backend (Phase 0)**: Persistent vector storage replaces SQLite blob storage
   - Qdrant local mode (file-based, no server required)
   - Hybrid search: TF-IDF + vector similarity (0.3 weight)
-  - Migration script: `python -m daem0nmcp.migrations.migrate_vectors`
+  - Migration script: `python -m claude_memory.migrations.migrate_vectors`
 
-- **Proactive File Watcher (Phase 1)**: The Daem0n now watches your files proactively
+- **Proactive File Watcher (Phase 1)**: The memory system now watches your files proactively
   - Monitors file changes and notifies when files with associated memories are modified
   - Multi-channel notifications:
     - **System notifications**: Desktop alerts via `plyer`
-    - **Log file**: JSON-lines at `.daem0nmcp/storage/watcher.log`
-    - **Editor poll**: JSON at `.daem0nmcp/storage/editor-poll.json` for IDE plugins
-  - Start with: `python -m daem0nmcp.cli watch`
+    - **Log file**: JSON-lines at `.claude_memory/storage/watcher.log`
+    - **Editor poll**: JSON at `.claude_memory/storage/editor-poll.json` for IDE plugins
+  - Start with: `python -m claude_memory.cli watch`
   - Configurable debouncing, skip patterns, extension filters
 
 ### Previous Features (v2.8.0)
@@ -190,9 +190,9 @@ Auto-recall memories without explicit calls based on context patterns:
 
 ### Previous Features (v2.5.0)
 - **Windows HTTP Transport**: Full Windows support via streamable-http (bypasses stdio bugs)
-- **Ritual-Themed Installation**: `Summon_Daem0n.md` and `Banish_Daem0n.md` for fun
+- **Step-Themed Installation**: `Initialize_Claude Memory.md` and `Remove_Claude Memory.md` for fun
 - **Claude Code Hooks**: Auto-reminders to use memory tools
-- **Protocol Skill**: `daem0nmcp-protocol` skill for Superpowers users
+- **Protocol Skill**: `claude_memory-protocol` skill for Superpowers users
 
 ### Core Features (v2.1+)
 - **TF-IDF Semantic Search**: Real similarity matching, not just keyword overlap
@@ -202,7 +202,7 @@ Auto-recall memories without explicit calls based on context patterns:
 - **File-Level Memories**: Associate memories with specific files
 - **Vector Embeddings**: sentence-transformers for enhanced semantic matching
 
-## Why Daem0nMCP?
+## Why Claude Memory?
 
 AI agents start each session fresh. They don't remember:
 - What decisions were made and why
@@ -211,7 +211,7 @@ AI agents start each session fresh. They don't remember:
 
 **Markdown files don't solve this** - the AI has to know to read them and might ignore them.
 
-**Daem0nMCP provides ACTIVE memory** - it surfaces relevant context when the AI asks about a topic, enforces rules before actions, and learns from outcomes.
+**Claude Memory provides ACTIVE memory** - it surfaces relevant context when the AI asks about a topic, enforces rules before actions, and learns from outcomes.
 
 ### What Makes This Different
 
@@ -225,24 +225,24 @@ Unlike keyword-based systems:
 
 ### The Easy Way (Recommended)
 
-1. Copy `Summon_Daem0n.md` to your project
+1. Copy `Initialize_Claude Memory.md` to your project
 2. Start a Claude Code session in that project
-3. Claude will read the file and perform the summoning ritual automatically
+3. Claude will read the file and perform the initializeing step automatically
 
 ### Manual Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/DasBluEyedDevil/Daem0n-MCP.git ~/Daem0nMCP
+git clone https://github.com/DasBluEyedDevil/Claude Memory.git ~/Claude Memory
 
 # Install
-pip install -e ~/Daem0nMCP
+pip install -e ~/Claude Memory
 
 # Run the MCP server (Linux/macOS)
-python -m daem0nmcp.server
+python -m claude_memory.server
 
 # Run the MCP server (Windows - use HTTP transport)
-python ~/Daem0nMCP/start_server.py --port 9876
+python ~/Claude Memory/start_server.py --port 9876
 ```
 
 ## Installation by Platform
@@ -254,7 +254,7 @@ python ~/Daem0nMCP/start_server.py --port 9876
 python3 -c "import sys; print(sys.executable)"
 
 # Register with Claude Code (replace <PYTHON_PATH>)
-claude mcp add daem0nmcp --scope user -- <PYTHON_PATH> -m daem0nmcp.server
+claude mcp add claude_memory --scope user -- <PYTHON_PATH> -m claude_memory.server
 
 # Restart Claude Code
 ```
@@ -265,15 +265,15 @@ Windows has a known bug where Python MCP servers using stdio transport hang inde
 
 1. **Start the server** (keep this terminal open):
 ```bash
-python ~/Daem0nMCP/start_server.py --port 9876
+python ~/Claude Memory/start_server.py --port 9876
 ```
-Or use `start_daem0nmcp_server.bat`
+Or use `start_claude_memory_server.bat`
 
 2. **Add to `~/.claude.json`**:
 ```json
 {
   "mcpServers": {
-    "daem0nmcp": {
+    "claude_memory": {
       "type": "http",
       "url": "http://localhost:9876/mcp"
     }
@@ -454,7 +454,7 @@ AFTER IMPLEMENTATION
     └─> record_outcome(memory_id, outcome, worked)
 ```
 
-See `Summon_Daem0n.md` for the complete protocol (with ritual theme for fun).
+See `Initialize_Claude Memory.md` for the complete protocol (with step theme for fun).
 
 ## Claude Code Integration
 
@@ -468,14 +468,14 @@ Add to `.claude/settings.json`:
       "matcher": "Edit|Write",
       "hooks": [{
         "type": "command",
-        "command": "echo '[Daem0n] Check memories before modifying'"
+        "command": "echo '[Claude Memory] Check memories before modifying'"
       }]
     }],
     "PostToolUse": [{
       "matcher": "Edit|Write",
       "hooks": [{
         "type": "command",
-        "command": "echo '[Daem0n] Consider calling remember()'"
+        "command": "echo '[Claude Memory] Consider calling remember()'"
       }]
     }]
   }
@@ -493,21 +493,21 @@ For fully automatic memory capture, enable all hooks in `.claude/settings.json`:
       "matcher": "Edit|Write|NotebookEdit",
       "hooks": [{
         "type": "command",
-        "command": "python3 \"$HOME/Daem0nMCP/hooks/daem0n_pre_edit_hook.py\""
+        "command": "python3 \"$HOME/claude-memory/hooks/claude_memory_pre_edit_hook.py\""
       }]
     }],
     "PostToolUse": [{
       "matcher": "Edit|Write",
       "hooks": [{
         "type": "command",
-        "command": "python3 \"$HOME/Daem0nMCP/hooks/daem0n_post_edit_hook.py\""
+        "command": "python3 \"$HOME/claude-memory/hooks/claude_memory_post_edit_hook.py\""
       }]
     }],
     "Stop": [{
       "matcher": "",
       "hooks": [{
         "type": "command",
-        "command": "python3 \"$HOME/Daem0nMCP/hooks/daem0n_stop_hook.py\""
+        "command": "python3 \"$HOME/claude-memory/hooks/claude_memory_stop_hook.py\""
       }]
     }]
   }
@@ -521,12 +521,12 @@ For fully automatic memory capture, enable all hooks in `.claude/settings.json`:
 
 ### Protocol Skill
 
-For Superpowers users, a skill is included at `.claude/skills/daem0nmcp-protocol/SKILL.md` that enforces the memory protocol.
+For Superpowers users, a skill is included at `.claude/skills/claude_memory-protocol/SKILL.md` that enforces the memory protocol.
 
 ## How It Works
 
 ### TF-IDF Similarity
-Instead of simple keyword matching, Daem0nMCP builds TF-IDF vectors for all stored memories and queries. This means:
+Instead of simple keyword matching, Claude Memory builds TF-IDF vectors for all stored memories and queries. This means:
 - "authentication" matches memories about "auth", "login", "OAuth"
 - Rare terms (like project-specific names) get higher weight
 - Common words are automatically de-emphasized
@@ -552,32 +552,32 @@ Warnings get a 1.2x boost. This ensures past mistakes surface prominently.
 
 Each project gets isolated storage at:
 ```
-<project_root>/.daem0nmcp/storage/daem0nmcp.db
+<project_root>/.claude_memory/storage/claude_memory.db
 ```
 
 ### Legacy Migration
-If upgrading from DevilMCP, data is automatically migrated from `.devilmcp/` to `.daem0nmcp/`.
+If upgrading from DevilMCP, data is automatically migrated from `.devilmcp/` to `.claude_memory/`.
 
 ## Configuration
 
-Environment variables (prefix: `DAEM0NMCP_`):
+Environment variables (prefix: `CLAUDE_MEMORY_`):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DAEM0NMCP_PROJECT_ROOT` | `.` | Project root path |
-| `DAEM0NMCP_STORAGE_PATH` | auto | Override storage location |
-| `DAEM0NMCP_LOG_LEVEL` | `INFO` | Logging level |
+| `CLAUDE_MEMORY_PROJECT_ROOT` | `.` | Project root path |
+| `CLAUDE_MEMORY_STORAGE_PATH` | auto | Override storage location |
+| `CLAUDE_MEMORY_LOG_LEVEL` | `INFO` | Logging level |
 
 ## Architecture
 
 ```
-daem0nmcp/
+claude_memory/
 ├── server.py       # MCP server with 42+ tools (FastMCP)
 ├── memory.py       # Memory storage & semantic retrieval
 ├── rules.py        # Rule engine with TF-IDF matching
 ├── similarity.py   # TF-IDF index, decay, conflict detection
 ├── vectors.py      # Vector embeddings (sentence-transformers)
-├── covenant.py     # Sacred Covenant enforcement decorators & preflight tokens
+├── covenant.py     # Protocol enforcement decorators & preflight tokens
 ├── code_indexer.py # Code understanding via tree-sitter (Phase 2)
 ├── watcher.py      # Proactive file watcher daemon (Phase 1)
 ├── database.py     # SQLite async database
@@ -592,11 +592,11 @@ daem0nmcp/
 
 .claude/
 └── skills/
-    └── daem0nmcp-protocol/
+    └── claude_memory-protocol/
         └── SKILL.md   # Protocol enforcement skill
 
-Summon_Daem0n.md   # Installation instructions (ritual theme)
-Banish_Daem0n.md   # Uninstallation instructions
+Initialize_Claude Memory.md   # Installation instructions (step theme)
+Remove_Claude Memory.md   # Uninstallation instructions
 start_server.py    # HTTP server launcher (Windows)
 ```
 
@@ -604,54 +604,54 @@ start_server.py    # HTTP server launcher (Windows)
 
 ```bash
 # Check a file against memories and rules
-python -m daem0nmcp.cli check <filepath>
+python -m claude_memory.cli check <filepath>
 
 # Get session briefing/statistics
-python -m daem0nmcp.cli briefing
+python -m claude_memory.cli briefing
 
 # Scan for TODO/FIXME/HACK comments
-python -m daem0nmcp.cli scan-todos [--auto-remember] [--path PATH]
+python -m claude_memory.cli scan-todos [--auto-remember] [--path PATH]
 
 # Index code entities (Phase 2)
-python -m daem0nmcp.cli index [--path PATH] [--patterns **/*.py **/*.ts ...]
+python -m claude_memory.cli index [--path PATH] [--patterns **/*.py **/*.ts ...]
 
 # Run database migrations (usually automatic)
-python -m daem0nmcp.cli migrate [--backfill-vectors]
+python -m claude_memory.cli migrate [--backfill-vectors]
 ```
 
 ### Enforcement Commands
 
 ```bash
 # Check staged files (used by pre-commit hook)
-python -m daem0nmcp.cli pre-commit [--interactive]
+python -m claude_memory.cli pre-commit [--interactive]
 
 # Show pending decisions and blocking issues
-python -m daem0nmcp.cli status
+python -m claude_memory.cli status
 
 # Record outcome for a decision
-python -m daem0nmcp.cli record-outcome <id> "<outcome>" --worked|--failed
+python -m claude_memory.cli record-outcome <id> "<outcome>" --worked|--failed
 
 # Install git hooks
-python -m daem0nmcp.cli install-hooks [--force]
+python -m claude_memory.cli install-hooks [--force]
 
 # Remove git hooks
-python -m daem0nmcp.cli uninstall-hooks
+python -m claude_memory.cli uninstall-hooks
 ```
 
 All commands support `--json` for machine-readable output and `--project-path` to specify the project root.
 
 ## Upgrading
 
-Upgrading Daem0n-MCP is straightforward:
+Upgrading Claude Memory is straightforward:
 
 ### 1. Update the Code
 
 ```bash
 # If installed from source (recommended)
-cd ~/Daem0nMCP && git pull && pip install -e .
+cd ~/Claude Memory && git pull && pip install -e .
 
 # If installed via pip
-pip install --upgrade daem0nmcp
+pip install --upgrade claude_memory
 ```
 
 **Important:** The `pip install -e .` step is required to install all dependencies:
@@ -677,7 +677,7 @@ No manual migration step required.
 Pre-commit hooks block commits when decisions lack outcomes:
 
 ```bash
-python -m daem0nmcp.cli install-hooks
+python -m claude_memory.cli install-hooks
 ```
 
 ### 5. Index Your Codebase
@@ -685,7 +685,7 @@ python -m daem0nmcp.cli install-hooks
 Enable code understanding by indexing your project:
 
 ```bash
-python -m daem0nmcp.cli index
+python -m claude_memory.cli index
 ```
 
 This parses your code with tree-sitter (supports Python, TypeScript, JavaScript, Go, Rust, Java, C, C++, C#, Ruby, PHP) and enables semantic code search via `find_code()` and impact analysis via `analyze_impact()`.
@@ -694,7 +694,7 @@ This parses your code with tree-sitter (supports Python, TypeScript, JavaScript,
 
 ### MCP Tools Not Available in Claude Session
 
-**Symptom:** `claude mcp list` shows daem0nmcp connected, but Claude can't use `mcp__daem0nmcp__*` tools.
+**Symptom:** `claude mcp list` shows claude_memory connected, but Claude can't use `mcp__claude_memory__*` tools.
 
 **Cause:** Known Claude Code bug ([#2682](https://github.com/anthropics/claude-code/issues/2682)) where MCP tools are discovered but not injected into Claude's toolbox.
 
@@ -702,8 +702,8 @@ This parses your code with tree-sitter (supports Python, TypeScript, JavaScript,
 
 1. **Start server before Claude Code:**
    ```bash
-   # Terminal 1: Start Daem0n server first
-   python ~/Daem0nMCP/start_server.py --port 9876
+   # Terminal 1: Start Claude Memory server first
+   python ~/Claude Memory/start_server.py --port 9876
 
    # Wait for "Uvicorn running on http://localhost:9876"
 
@@ -713,22 +713,22 @@ This parses your code with tree-sitter (supports Python, TypeScript, JavaScript,
 
 2. **Re-register the server:**
    ```bash
-   claude mcp remove daem0nmcp -s user
-   claude mcp add daem0nmcp http://localhost:9876/mcp -s user
+   claude mcp remove claude_memory -s user
+   claude mcp add claude_memory http://localhost:9876/mcp -s user
    ```
 
 3. **Verify tools are available:**
-   - Claude should show `mcp__daem0nmcp__*` tools in its toolbox
+   - Claude should show `mcp__claude_memory__*` tools in its toolbox
    - If Claude tries `claude mcp call` bash commands instead, the tools aren't injected
 
 ### Hooks Not Firing
 
-**Symptom:** Pre-edit hooks don't show Daem0n context.
+**Symptom:** Pre-edit hooks don't show Claude Memory context.
 
 **Check:**
 1. MCP server running: `curl http://localhost:9876/mcp` should respond
 2. Hooks configured in `.claude/settings.json`
-3. Project has `.daem0nmcp/` directory
+3. Project has `.claude_memory/` directory
 
 ## Development
 
@@ -740,7 +740,7 @@ pip install -e .
 pytest tests/ -v --asyncio-mode=auto
 
 # Run server directly
-python -m daem0nmcp.server
+python -m claude_memory.server
 
 # Run HTTP server (Windows)
 python start_server.py --port 9876
@@ -748,26 +748,26 @@ python start_server.py --port 9876
 
 ## Support
 
-If Daem0nMCP has been useful to you, consider supporting its development:
+If Claude Memory has been useful to you, consider supporting its development:
 
 [![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/vitruvianredux)
 
 ## Uninstallation
 
-See `Banish_Daem0n.md` for complete removal instructions, or quick version:
+See `Remove_Claude Memory.md` for complete removal instructions, or quick version:
 
 ```bash
 # Remove MCP registration
-claude mcp remove daem0nmcp --scope user
+claude mcp remove claude_memory --scope user
 
 # Uninstall package
-pip uninstall daem0nmcp
+pip uninstall claude_memory
 
 # Remove repository
-rm -rf ~/Daem0nMCP
+rm -rf ~/Claude Memory
 
 # Remove project data (optional)
-rm -rf .daem0nmcp/
+rm -rf .claude_memory/
 ```
 
 ---
@@ -775,7 +775,7 @@ rm -rf .daem0nmcp/
 ```
     "The system learns from YOUR outcomes.
      Record them faithfully..."
-                              ~ Daem0n
+                              ~ Claude Memory
 ```
 
-*Daem0nMCP v2.16.0: Sacred Covenant Enforcement—rigid enforcement decorators, preflight tokens, MCP Resources for dynamic context injection, Claude Code 2.1.3 compatibility.*
+*Claude Memory v2.16.0: Protocol Enforcement—rigid enforcement decorators, preflight tokens, MCP Resources for dynamic context injection, Claude Code 2.1.3 compatibility.*

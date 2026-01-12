@@ -18,8 +18,8 @@ class TestIndexFreshness:
     @pytest.mark.asyncio
     async def test_memory_index_rebuilds_after_external_change(self, temp_storage):
         """Verify TF-IDF index rebuilds when DB is modified externally."""
-        from daem0nmcp.database import DatabaseManager
-        from daem0nmcp.memory import MemoryManager
+        from claude_memory.database import DatabaseManager
+        from claude_memory.memory import MemoryManager
         import sqlite3
         import time
 
@@ -67,9 +67,9 @@ class TestIndexFreshness:
     @pytest.mark.asyncio
     async def test_rebuild_index_tool(self, temp_storage):
         """Test the rebuild_index MCP tool."""
-        from daem0nmcp.database import DatabaseManager
-        from daem0nmcp.memory import MemoryManager
-        from daem0nmcp.rules import RulesEngine
+        from claude_memory.database import DatabaseManager
+        from claude_memory.memory import MemoryManager
+        from claude_memory.rules import RulesEngine
 
         db = DatabaseManager(temp_storage)
         await db.init_db()
