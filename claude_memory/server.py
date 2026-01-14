@@ -288,6 +288,66 @@ def _maybe_schedule_eviction(now: float) -> None:
 set_release_callback(_release_current_task_contexts)
 
 
+async def _get_global_memory_manager():
+    """
+    Get or create the global memory manager singleton.
+
+    The global memory manager is a special ProjectContext with project_path="__global__"
+    stored at ~/.claude-memory/storage (configurable via CLAUDE_MEMORY_GLOBAL_PATH).
+
+    Uses the existing ProjectContext caching mechanism.
+
+    Returns:
+        MemoryManager instance for global storage
+    """
+    if not settings.global_enabled:
+        return None
+
+    GLOBAL_KEY = "__global__"
+
+    # Fast path: check if already initialized
+    if GLOBAL_KEY in _project_contexts:
+        ctx = _project_contexts[GLOBAL_KEY]
+        if ctx.initialized:
+            import time
+            ctx.last_accessed = time.time()
+            return ctx.memory_manager
+
+    # Slow path: initialize global context
+    async with _contexts_lock:
+        # Double-check after acquiring lock
+        if GLOBAL_KEY in _project_contexts:
+            ctx = _project_contexts[GLOBAL_KEY]
+            if ctx.initialized:
+                import time
+                ctx.last_accessed = time.time()
+                return ctx.memory_manager
+
+        # Create global storage context
+        import time
+        global_storage = settings.get_global_storage_path()
+
+        logger.info(f"Initializing global memory at: {global_storage}")
+
+        global_db = DatabaseManager(global_storage)
+        await global_db.init_db()
+
+        global_context = ProjectContext(
+            project_path=GLOBAL_KEY,
+            storage_path=global_storage,
+            db_manager=global_db,
+            memory_manager=MemoryManager(global_db),
+            rules_engine=RulesEngine(global_db),
+            initialized=True,
+            last_accessed=time.time()
+        )
+
+        _project_contexts[GLOBAL_KEY] = global_context
+        logger.info("Global memory manager initialized")
+
+    return global_context.memory_manager
+
+
 async def get_project_context(project_path: Optional[str] = None) -> ProjectContext:
     """
     Get or create a ProjectContext for the given project path.

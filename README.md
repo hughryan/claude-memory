@@ -553,13 +553,34 @@ Warnings get a 1.2x boost. This ensures past mistakes surface prominently.
 
 ## Data Storage
 
+### Project Memory (Local)
+
 Each project gets isolated storage at:
 ```
-<project_root>/.claude_memory/storage/claude_memory.db
+<project_root>/.claude-memory/storage/claude_memory.db
 ```
 
+**Important**: Add `.claude-memory/` to your project's `.gitignore` to avoid committing database files:
+```gitignore
+# Claude Memory - project-specific memories
+.claude-memory/
+```
+
+### Global Memory (Cross-Project)
+
+Universal patterns and best practices are automatically stored in global memory:
+```
+~/.claude-memory/storage/claude_memory.db  (default)
+```
+
+Claude automatically classifies memories as:
+- **Local**: Project-specific decisions, code with file paths, "this repo" language
+- **Global**: Universal patterns, language-specific best practices, security guidelines
+
+When you recall memories, Claude searches both local and global, with local taking precedence.
+
 ### Legacy Migration
-If upgrading from a previous installation, data is automatically migrated to `.claude_memory/`.
+If upgrading from a previous installation, data is automatically migrated to `.claude-memory/`.
 
 ## Configuration
 
@@ -568,7 +589,10 @@ Environment variables (prefix: `CLAUDE_MEMORY_`):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CLAUDE_MEMORY_PROJECT_ROOT` | `.` | Project root path |
-| `CLAUDE_MEMORY_STORAGE_PATH` | auto | Override storage location |
+| `CLAUDE_MEMORY_STORAGE_PATH` | auto | Override storage location (project-local) |
+| `CLAUDE_MEMORY_GLOBAL_PATH` | `~/.claude-memory/storage` | Global memory storage path |
+| `CLAUDE_MEMORY_GLOBAL_ENABLED` | `true` | Enable/disable global memory feature |
+| `CLAUDE_MEMORY_GLOBAL_WRITE_ENABLED` | `true` | Allow writing to global memory |
 | `CLAUDE_MEMORY_LOG_LEVEL` | `INFO` | Logging level |
 
 ## Architecture

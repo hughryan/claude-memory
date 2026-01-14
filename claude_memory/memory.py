@@ -51,6 +51,91 @@ FAILED_DECISION_BOOST = 1.5  # Failed decisions are valuable warnings
 WARNING_BOOST = 1.2  # Warnings get moderate boost
 
 
+def _classify_memory_scope(
+    category: str,
+    content: str,
+    rationale: Optional[str],
+    file_path: Optional[str],
+    tags: Optional[List[str]],
+    project_path: Optional[str]
+) -> str:
+    """
+    Classify memory as 'global' (cross-project) or 'local' (project-specific).
+
+    Classification is based on heuristic signals that indicate whether the memory
+    represents universal knowledge or project-specific context.
+
+    Args:
+        category: Memory category (decision, pattern, warning, learning)
+        content: The memory content text
+        rationale: Optional rationale text
+        file_path: Optional file path association (strong local signal)
+        tags: Optional list of tags
+        project_path: Optional project path
+
+    Returns:
+        "global" if memory should be stored globally, "local" otherwise
+    """
+    # Strong local signals
+    if file_path:
+        # Any memory associated with a specific file is project-specific
+        return "local"
+
+    # Combine content and rationale for analysis
+    text = (content + " " + (rationale or "")).lower()
+
+    # Check for project-specific language patterns
+    local_patterns = [
+        r'\bthis\s+(repo|project|codebase|repository|app|application)\b',
+        r'\bour\s+(app|service|api|code|codebase|project|team)\b',
+        r'\bin\s+(src/|tests?/|lib/|app/|components?/)',
+        r'\bmain\.py\b',
+        r'\bindex\.(js|ts|jsx|tsx)\b',
+        r'\b(PR|pull\s+request)\s*#?\d+\b',
+        r'\b(issue|ticket|bug)\s*#?\d+\b',
+        r'\bin\s+this\s+(file|module|directory|folder)\b',
+        r'\bcurrent\s+(project|codebase|repo)\b',
+    ]
+
+    for pattern in local_patterns:
+        if re.search(pattern, text):
+            return "local"
+
+    # Check for global/universal patterns
+    global_patterns = [
+        r'\balways\s+(use|prefer|avoid|remember|ensure)\b',
+        r'\bnever\s+(use|do|allow|permit)\b',
+        r'\bavoid\s+\w+\s+(pattern|anti-pattern)\b',
+        r'\b(best|good|bad)\s+practice\b',
+        r'\bin\s+(python|javascript|typescript|rust|go|java|c\+\+|ruby|php|c#)\b',
+        r'\b(general|universal)\s+(rule|principle|guideline)\b',
+        r'\bdesign\s+pattern\b',
+        r'\balgorithm\s+(for|to)\b',
+        r'\b(when|whenever)\s+(you|we|one)\s+(need|want|should)\b',
+    ]
+
+    # Check for global tags
+    global_tag_markers = {
+        "best-practice", "design-pattern", "anti-pattern",
+        "general", "architecture", "language-feature", "algorithm",
+        "security", "performance", "accessibility"
+    }
+
+    has_global_tag = bool(tags) and any(
+        tag.lower() in global_tag_markers for tag in tags
+    )
+    has_global_pattern = any(re.search(p, text) for p in global_patterns)
+
+    # Patterns and warnings without file paths are more likely global
+    # if they use universal language
+    if category in {"pattern", "warning"}:
+        if has_global_tag or has_global_pattern:
+            return "global"
+
+    # Default to local (safer - prevents accidental leakage to global)
+    return "local"
+
+
 def _normalize_file_path(file_path: Optional[str], project_path: str) -> Tuple[Optional[str], Optional[str]]:
     """
     Normalize a file path to both absolute and project-relative forms.
@@ -485,6 +570,41 @@ class MemoryManager:
             except Exception as e:
                 logger.debug(f"Session tracking failed (non-fatal): {e}")
 
+        # Classify memory scope and optionally write to global storage
+        # Skip classification if already in global context (prevent recursion)
+        is_global_context = project_path == "__global__"
+
+        if not is_global_context:
+            scope = _classify_memory_scope(category, content, rationale, file_path, tags, project_path)
+            result["scope"] = scope
+        else:
+            # Already in global storage, mark as global
+            result["scope"] = "global"
+            scope = "global"
+
+        if scope == "global" and settings.global_enabled and settings.global_write_enabled and not is_global_context:
+            try:
+                # Import here to avoid circular dependency
+                from .server import _get_global_memory_manager
+
+                global_manager = await _get_global_memory_manager()
+                if global_manager:
+                    # Store in global memory (without file_path for portability)
+                    global_result = await global_manager.remember(
+                        category=category,
+                        content=content,
+                        rationale=rationale,
+                        context=context,
+                        tags=tags,
+                        file_path=None,  # Strip file path for global storage
+                        project_path="__global__"
+                    )
+                    result["_also_stored_globally"] = global_result["id"]
+                    logger.info(f"Memory {memory_id} also stored globally (id: {global_result['id']})")
+            except Exception as e:
+                logger.warning(f"Failed to store to global memory (non-fatal): {e}")
+                result["scope"] = "local_only"  # Downgrade scope on failure
+
         return result
 
     async def remember_batch(
@@ -813,6 +933,95 @@ class MemoryManager:
             return content
         return content[:max_length] + "..."
 
+    def _merge_global_results(
+        self,
+        local_memories: List[Dict[str, Any]],
+        global_memories: List[Dict[str, Any]],
+        limit_per_category: int
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Merge local and global memories with local precedence.
+
+        Strategy:
+        1. Boost local scores slightly (1.1x) to prefer local in ties
+        2. Detect semantic duplicates (similarity > 0.85)
+        3. Filter out global memories that duplicate local ones
+        4. Tag remaining global memories with _from_global
+
+        Args:
+            local_memories: List of memory dicts from local storage
+            global_memories: List of memory dicts from global storage
+            limit_per_category: Max memories per category
+
+        Returns:
+            Dict of categorized memories with deduplication applied
+        """
+        # Boost local scores for precedence
+        for mem in local_memories:
+            if 'relevance' in mem:
+                mem['relevance'] *= 1.1
+
+        # Build a simple text-based similarity check for deduplication
+        # For more accurate deduplication, we'd use actual vector similarity,
+        # but for now we'll use content matching as a proxy
+        local_contents = {
+            (mem.get('content', '') + mem.get('rationale', '')).lower()
+            for mem in local_memories
+        }
+
+        # Filter global memories that are too similar to local ones
+        filtered_global = []
+        for global_mem in global_memories:
+            global_text = (global_mem.get('content', '') + global_mem.get('rationale', '')).lower()
+
+            # Simple similarity check: if any local memory contains or is contained
+            # in global memory content, consider it a duplicate
+            is_duplicate = False
+            for local_text in local_contents:
+                # Check for substantial overlap (simple heuristic)
+                if len(local_text) > 20 and len(global_text) > 20:
+                    # If texts are very similar (one contains most of the other)
+                    shorter = min(len(local_text), len(global_text))
+                    if shorter > 0:
+                        # Simple containment check as proxy for similarity
+                        if (local_text in global_text or global_text in local_text):
+                            is_duplicate = True
+                            logger.debug(f"Global memory filtered as duplicate of local: {global_mem.get('content', '')[:50]}...")
+                            break
+
+            if not is_duplicate:
+                # Tag as from global
+                global_mem['_from_global'] = True
+                filtered_global.append(global_mem)
+
+        # Combine local and filtered global
+        all_memories = local_memories + filtered_global
+
+        # Sort by relevance score
+        all_memories.sort(key=lambda m: m.get('relevance', 0), reverse=True)
+
+        # Organize by category
+        by_category = {
+            'decisions': [],
+            'patterns': [],
+            'warnings': [],
+            'learnings': []
+        }
+
+        for mem in all_memories:
+            # Determine category key
+            if 'category' in mem:
+                cat_key = mem['category'] + 's'
+            else:
+                # Memory dict already has category inferred from structure
+                # Try to infer from which list it came from
+                continue
+
+            if cat_key in by_category and len(by_category[cat_key]) < limit_per_category:
+                by_category[cat_key].append(mem)
+
+        return by_category
+
     async def _increment_recall_counts(self, memory_ids: List[int]) -> None:
         """Increment recall_count for accessed memories (for saliency-based pruning)."""
         if not memory_ids:
@@ -886,7 +1095,8 @@ class MemoryManager:
             until.isoformat() if until else None,
             include_warnings, decay_half_life_days,
             include_linked,
-            condensed  # Include condensed in cache key for separate caching
+            condensed,  # Include condensed in cache key for separate caching
+            settings.global_enabled  # Include global flag in cache key
         )
         found, cached_result = cache.get(cache_key)
         if found and cached_result is not None:
@@ -1084,6 +1294,57 @@ class MemoryManager:
             'summary': " | ".join(summary_parts) if summary_parts else None,
             **by_category
         }
+
+        # Search global memory and merge with local (if enabled)
+        is_global_context = project_path == "__global__"
+        if settings.global_enabled and not is_global_context:
+            try:
+                # Import here to avoid circular dependency
+                from .server import _get_global_memory_manager
+
+                global_manager = await _get_global_memory_manager()
+                if global_manager and global_manager != self:  # Don't search ourselves
+                    # Search global memory with same parameters
+                    global_result = await global_manager.recall(
+                        topic=topic,
+                        categories=categories,
+                        tags=tags,
+                        file_path=None,  # Global memories don't have file paths
+                        offset=0,
+                        limit=limit * 2,  # Fetch more for better merging
+                        since=since,
+                        until=until,
+                        project_path="__global__",
+                        include_warnings=include_warnings,
+                        decay_half_life_days=decay_half_life_days,
+                        include_linked=False,  # Don't recurse
+                        condensed=condensed
+                    )
+
+                    # Merge global results with local, applying precedence
+                    for category in ["decisions", "patterns", "warnings", "learnings"]:
+                        if category in global_result and global_result[category]:
+                            # Tag global memories
+                            for mem in global_result[category]:
+                                mem['_from_global'] = True
+
+                            # Simple merge: append global to local (deduplication in future iteration)
+                            # For now, just add global memories if we have room
+                            current_count = len(result.get(category, []))
+                            if current_count < limit:
+                                # Add global memories up to the limit
+                                remaining_slots = limit - current_count
+                                result.setdefault(category, []).extend(
+                                    global_result[category][:remaining_slots]
+                                )
+
+                    # Update found count
+                    result['found'] = sum(len(v) for k, v in result.items()
+                                        if k in ['decisions', 'patterns', 'warnings', 'learnings'])
+
+                    logger.debug(f"Merged global memories into recall results for topic: {topic[:50]}...")
+            except Exception as e:
+                logger.warning(f"Failed to search global memory (non-fatal): {e}")
 
         # Aggregate from linked projects if requested
         if include_linked and project_path:
