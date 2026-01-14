@@ -75,6 +75,11 @@ class Settings(BaseSettings):
     parse_tree_cache_maxsize: int = 200
     index_languages: List[str] = []  # Empty = all supported
 
+    # Global Memory (cross-project knowledge)
+    global_enabled: bool = True  # Enable global memory feature
+    global_path: Optional[str] = None  # Override default ~/.claude-memory/storage
+    global_write_enabled: bool = True  # Allow projects to write to global storage
+
     def _migrate_legacy_storage(self, project_path: Path, new_storage: Path) -> bool:
         """
         Migrate data from legacy .devilmcp directory to .claude-memory.
@@ -203,6 +208,34 @@ class Settings(BaseSettings):
         """
         storage = Path(self.get_storage_path())
         return storage / "editor-poll.json"
+
+    def get_global_storage_path(self) -> str:
+        """
+        Determine global storage path for cross-project memories.
+
+        Priority:
+        1. global_path setting (explicit override via CLAUDE_MEMORY_GLOBAL_PATH)
+        2. ~/.claude-memory/storage (default user-level storage)
+
+        Returns:
+            Absolute path to global storage directory
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Check for explicit global path override
+        if self.global_path:
+            global_dir = Path(self.global_path)
+            global_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Using custom global storage: {global_dir}")
+            return str(global_dir)
+
+        # Default: user's home directory
+        global_dir = Path.home() / ".claude-memory" / "storage"
+        global_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Using default global storage: {global_dir}")
+
+        return str(global_dir)
 
 
 # Singleton instance

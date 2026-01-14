@@ -1668,6 +1668,58 @@ Environment variables (prefix: `CLAUDE_MEMORY_`):
 | `WATCHER_SKIP_PATTERNS` | `[]` | Additional skip patterns |
 | `WATCHER_WATCH_EXTENSIONS` | `[]` | Extension filter |
 
+### Global Memory Configuration
+
+**Global Memory** stores universal patterns and best practices across all your projects.
+
+Environment variables (prefix: `CLAUDE_MEMORY_`):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GLOBAL_ENABLED` | `true` | Enable global memory feature |
+| `GLOBAL_PATH` | `~/.claude-memory/storage` | Global memory storage location |
+| `GLOBAL_WRITE_ENABLED` | `true` | Allow projects to write to global storage |
+
+**How It Works:**
+
+When you store a memory, Claude automatically classifies it as:
+- **Local** (project-specific): Has file paths, mentions "this repo", project-specific decisions
+- **Global** (universal): Best practices, design patterns, security guidelines, language-specific patterns
+
+**Example:**
+```bash
+# Store a universal pattern (automatically goes to global)
+remember --category pattern \
+  --content "Always validate user input to prevent XSS attacks" \
+  --tags security best-practice
+# → Stored in both local AND global
+
+# Store a project decision (stays local only)
+remember --category decision \
+  --content "Use Redis for session caching in this app" \
+  --file src/cache.py
+# → Stored in local only (has file path)
+```
+
+**Recall searches both:**
+```bash
+# Searches local + global automatically
+recall "input validation"
+# → Returns both project-specific AND universal memories
+# → Local memories take precedence over global duplicates
+```
+
+**Configure custom global path:**
+```bash
+export CLAUDE_MEMORY_GLOBAL_PATH="/shared/team-memory/storage"
+```
+
+**Add to .gitignore:**
+```gitignore
+# Claude Memory - project-specific (don't commit!)
+.claude-memory/
+```
+
 ### Default Skip Patterns
 
 The watcher automatically ignores:
